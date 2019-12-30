@@ -1,2 +1,3 @@
 # 500-data
-Data for the 500 course
+
+Data and code for the 500 course can be obtained at this repository.
