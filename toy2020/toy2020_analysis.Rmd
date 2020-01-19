@@ -3,10 +3,10 @@ title: "The toy2020 Example"
 author: "Thomas E. Love, Ph.D."
 date: 'Version: `r Sys.Date()`'
 output:
+  github_document:
+    toc: yes
   html_document:
     df_print: paged
-    toc: yes
-  github_document:
     toc: yes
   pdf_document:
     toc: yes
@@ -540,7 +540,7 @@ We see values outside the 4/5 and 5/4 lines, but nothing falls outside (0.5, 2).
 
 # Task 4. Use 1:1 greedy matching on the linear PS, then check post-match balance
 
-As requested, we'll do 1:1 greedy matching on the linear propensity score without replacement and breaking ties randomly. To start, we won't include an outcome variable in our call to the `Match` function within the `Matching` package We'll wind up with a match including 140 treated and 140 control subjects.
+As requested, we'll do 1:1 greedy matching on the linear propensity score without replacement and breaking ties randomly. Note that we use `replace = FALSE` and `ties=FALSE` here. To start, we won't include an outcome variable in our call to the `Match` function within the `Matching` package We'll wind up with a match including 140 treated and 140 control subjects. 
 
 ```{r}
 X <- toy$linps ## matching on the linear propensity score
@@ -549,9 +549,29 @@ match1 <- Match(Tr=Tr, X=X, M = 1, replace=FALSE, ties=FALSE)
 summary(match1)
 ```
 
+### Alternative Matching Strategies.
+
+There are many other strategies available for doing matching in R, many of whom are supported by other packages we'll use, like `cobalt`. Our focus in this toy problem is 1:1 greedy matching using the `Matching` package, but we'll also briefly mention a couple of other approaches available in that same package.
+
+Specifically, if we wanted to do matching with replacement, we would use `replace = TRUE` (which is actually the default choice) and maintain `ties = FALSE`. 
+
+If we wanted to do 1:2 rather than 1:1 matching with the `Match` function, we would change `M = 1` to `M = 2`.
+
+1. Suppose you run a 1:1 propensity match **with replacement**. You should want to know:
+    - how many treated subjects are in your matched sample, and 
+    - how many control subjects are in your matched sample
+
+If you run a match using `match_with_replacement <- Match(Y, Tr, X, M=1, ties = FALSE)` then these answers come from `n_distinct(match_with_replacement$index.treated)` and `n_distinct(match_with_replacement$index.control)`, respectively. This method works for 1:2 matches, too.
+
+2. When matching with replacement using the `Match` function from the Matching package, you should always indicate `ties = FALSE`.
+    - So, `match2 <- Match(Tr=Tr, X=X, M = 1, ties=FALSE)` is OK, but `match2 <- Match(Tr=Tr, X=X, M = 1)` is not. 
+    - You'll know it worked properly if you run `n_distinct(match2$index.treated)` and `n_distinct(match2$index.control)` and the control group size is no larger than the treated group size. 
+    - The conclusion: Regardless of whether you're doing with or without replacement, run `Match` using `ties = FALSE`.
+
+
 ## Balance Assessment (Semi-Automated)
 
-Next, we'll assess the balance imposed by this greedy match on our covariates, and their transformations (`A`^2 and `B*C` and `B*D`) as well as the raw and linear propensity scores. The default output from the `MatchBalance` function is extensive...
+OK, back to our 1:1 greedy match without replacement. Next, we'll assess the balance imposed by this greedy match on our covariates, and their transformations (`A`^2 and `B*C` and `B*D`) as well as the raw and linear propensity scores. The default output from the `MatchBalance` function is extensive...
 
 ```{r}
 set.seed(5001)

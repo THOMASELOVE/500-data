@@ -1,7 +1,7 @@
 The toy2020 Example
 ================
 Thomas E. Love, Ph.D.
-Version: 2020-01-18
+Version: 2020-01-19
 
   - [Setup](#setup)
   - [The Data Set](#the-data-set)
@@ -58,6 +58,8 @@ Version: 2020-01-18
   - [Task 4. Use 1:1 greedy matching on the linear PS, then check
     post-match
     balance](#task-4.-use-11-greedy-matching-on-the-linear-ps-then-check-post-match-balance)
+      - [Alternative Matching
+        Strategies.](#alternative-matching-strategies.)
       - [Balance Assessment
         (Semi-Automated)](#balance-assessment-semi-automated)
       - [Extracting, Tabulating Standardized Differences (without
@@ -1524,10 +1526,11 @@ We see values outside the 4/5 and 5/4 lines, but nothing falls outside
 # Task 4. Use 1:1 greedy matching on the linear PS, then check post-match balance
 
 As requested, we’ll do 1:1 greedy matching on the linear propensity
-score without replacement and breaking ties randomly. To start, we won’t
-include an outcome variable in our call to the `Match` function within
-the `Matching` package We’ll wind up with a match including 140 treated
-and 140 control subjects.
+score without replacement and breaking ties randomly. Note that we use
+`replace = FALSE` and `ties=FALSE` here. To start, we won’t include an
+outcome variable in our call to the `Match` function within the
+`Matching` package We’ll wind up with a match including 140 treated and
+140 control subjects.
 
 ``` r
 X <- toy$linps ## matching on the linear propensity score
@@ -1549,12 +1552,50 @@ Matched number of observations...............  140
 Matched number of observations  (unweighted).  140 
 ```
 
+### Alternative Matching Strategies.
+
+There are many other strategies available for doing matching in R, many
+of whom are supported by other packages we’ll use, like `cobalt`. Our
+focus in this toy problem is 1:1 greedy matching using the `Matching`
+package, but we’ll also briefly mention a couple of other approaches
+available in that same package.
+
+Specifically, if we wanted to do matching with replacement, we would use
+`replace = TRUE` (which is actually the default choice) and maintain
+`ties = FALSE`.
+
+If we wanted to do 1:2 rather than 1:1 matching with the `Match`
+function, we would change `M = 1` to `M = 2`.
+
+1.  Suppose you run a 1:1 propensity match **with replacement**. You
+    should want to know:
+      - how many treated subjects are in your matched sample, and
+      - how many control subjects are in your matched sample
+
+If you run a match using `match_with_replacement <- Match(Y, Tr, X, M=1,
+ties = FALSE)` then these answers come from
+`n_distinct(match_with_replacement$index.treated)` and
+`n_distinct(match_with_replacement$index.control)`, respectively. This
+method works for 1:2 matches, too.
+
+2.  When matching with replacement using the `Match` function from the
+    Matching package, you should always indicate `ties = FALSE`.
+      - So, `match2 <- Match(Tr=Tr, X=X, M = 1, ties=FALSE)` is OK, but
+        `match2 <- Match(Tr=Tr, X=X, M = 1)` is not.
+      - You’ll know it worked properly if you run
+        `n_distinct(match2$index.treated)` and
+        `n_distinct(match2$index.control)` and the control group size is
+        no larger than the treated group size.
+      - The conclusion: Regardless of whether you’re doing with or
+        without replacement, run `Match` using `ties = FALSE`.
+
 ## Balance Assessment (Semi-Automated)
 
-Next, we’ll assess the balance imposed by this greedy match on our
-covariates, and their transformations (`A`^2 and `B*C` and `B*D`) as
-well as the raw and linear propensity scores. The default output from
-the `MatchBalance` function is extensive…
+OK, back to our 1:1 greedy match without replacement. Next, we’ll assess
+the balance imposed by this greedy match on our covariates, and their
+transformations (`A`^2 and `B*C` and `B*D`) as well as the raw and
+linear propensity scores. The default output from the `MatchBalance`
+function is extensive…
 
 ``` r
 set.seed(5001)
@@ -1568,20 +1609,20 @@ mb1 <- MatchBalance(treated ~ covA + covB + covC + covD + covE + covF +
 ***** (V1) covA *****
                        Before Matching       After Matching
 mean treatment........     3.1646            3.1646 
-mean control..........     3.0046            3.0755 
-std mean diff.........     14.051            7.8243 
+mean control..........     3.0046            3.0794 
+std mean diff.........     14.051            7.4855 
 
-mean raw eQQ diff.....    0.19193           0.15693 
-med  raw eQQ diff.....       0.21              0.16 
+mean raw eQQ diff.....    0.19193           0.15307 
+med  raw eQQ diff.....       0.21              0.15 
 max  raw eQQ diff.....       0.58              0.58 
 
-mean eCDF diff........   0.047314            0.0375 
+mean eCDF diff........   0.047314          0.036563 
 med  eCDF diff........   0.035165          0.035714 
 max  eCDF diff........    0.11868               0.1 
 
-var ratio (Tr/Co).....     1.0837            1.0032 
-T-test p-value........     0.1753           0.50899 
-KS Bootstrap p-value..      0.136             0.456 
+var ratio (Tr/Co).....     1.0837            1.0036 
+T-test p-value........     0.1753           0.52997 
+KS Bootstrap p-value..      0.136             0.454 
 KS Naive p-value......      0.154           0.48581 
 KS Statistic..........    0.11868               0.1 
 
@@ -1589,37 +1630,37 @@ KS Statistic..........    0.11868               0.1
 ***** (V2) covB *****
                        Before Matching       After Matching
 mean treatment........    0.51429           0.51429 
-mean control..........    0.29615              0.45 
-std mean diff.........     43.488            12.816 
+mean control..........    0.29615           0.44286 
+std mean diff.........     43.488             14.24 
 
-mean raw eQQ diff.....    0.22143          0.064286 
+mean raw eQQ diff.....    0.22143          0.071429 
 med  raw eQQ diff.....          0                 0 
 max  raw eQQ diff.....          1                 1 
 
-mean eCDF diff........    0.10907          0.032143 
-med  eCDF diff........    0.10907          0.032143 
-max  eCDF diff........    0.21813          0.064286 
+mean eCDF diff........    0.10907          0.035714 
+med  eCDF diff........    0.10907          0.035714 
+max  eCDF diff........    0.21813          0.071429 
 
-var ratio (Tr/Co).....     1.2023            1.0093 
-T-test p-value........ 2.6605e-05           0.20711 
+var ratio (Tr/Co).....     1.2023            1.0124 
+T-test p-value........ 2.6605e-05           0.15656 
 
 
 ***** (V3) covC *****
                        Before Matching       After Matching
 mean treatment........     9.6238            9.6238 
-mean control..........     10.596            9.7564 
-std mean diff.........    -51.896           -7.0834 
+mean control..........     10.596            9.7575 
+std mean diff.........    -51.896           -7.1406 
 
-mean raw eQQ diff.....     0.9755           0.19507 
-med  raw eQQ diff.....      0.975              0.15 
+mean raw eQQ diff.....     0.9755             0.188 
+med  raw eQQ diff.....      0.975             0.125 
 max  raw eQQ diff.....       1.64              0.87 
 
-mean eCDF diff........    0.12933          0.023458 
+mean eCDF diff........    0.12933          0.022166 
 med  eCDF diff........    0.13297          0.021429 
 max  eCDF diff........    0.24066          0.071429 
 
-var ratio (Tr/Co).....    0.83836           0.89783 
-T-test p-value........  2.582e-06           0.53616 
+var ratio (Tr/Co).....    0.83836           0.88238 
+T-test p-value........  2.582e-06           0.54102 
 KS Bootstrap p-value.. < 2.22e-16             0.878 
 KS Naive p-value...... 5.2867e-05           0.86743 
 KS Statistic..........    0.24066          0.071429 
@@ -1628,19 +1669,19 @@ KS Statistic..........    0.24066          0.071429
 ***** (V4) covD *****
                        Before Matching       After Matching
 mean treatment........     9.1593            9.1593 
-mean control..........     8.6469            9.2264 
-std mean diff.........     24.595           -3.2231 
+mean control..........     8.6469            9.2293 
+std mean diff.........     24.595           -3.3603 
 
-mean raw eQQ diff.....    0.54071           0.19143 
+mean raw eQQ diff.....    0.54071           0.19857 
 med  raw eQQ diff.....        0.5               0.1 
 max  raw eQQ diff.....        1.8               1.7 
 
-mean eCDF diff........   0.051117          0.018728 
+mean eCDF diff........   0.051117          0.019577 
 med  eCDF diff........   0.054945          0.014286 
 max  eCDF diff........    0.11648          0.057143 
 
-var ratio (Tr/Co).....     0.8872            1.1156 
-T-test p-value........   0.022381           0.78852 
+var ratio (Tr/Co).....     0.8872            1.1092 
+T-test p-value........   0.022381           0.78127 
 KS Bootstrap p-value..      0.124             0.938 
 KS Naive p-value......    0.16916           0.97626 
 KS Statistic..........    0.11648          0.057143 
@@ -1649,22 +1690,22 @@ KS Statistic..........    0.11648          0.057143
 ***** (V5) covE *****
                        Before Matching       After Matching
 mean treatment........     9.7714            9.7714 
-mean control..........       11.3            10.107 
-std mean diff.........    -53.833           -11.823 
+mean control..........       11.3            10.043 
+std mean diff.........    -53.833           -9.5592 
 
-mean raw eQQ diff.....     1.5143           0.47857 
+mean raw eQQ diff.....     1.5143           0.45714 
 med  raw eQQ diff.....          2                 0 
 max  raw eQQ diff.....          4                 2 
 
-mean eCDF diff........   0.095673          0.036813 
+mean eCDF diff........   0.095673          0.035165 
 med  eCDF diff........   0.074725         0.0071429 
-max  eCDF diff........    0.22473           0.13571 
+max  eCDF diff........    0.22473           0.12857 
 
-var ratio (Tr/Co).....    0.68813            1.1147 
-T-test p-value........ 2.7506e-06           0.26005 
-KS Bootstrap p-value.. < 2.22e-16             0.072 
-KS Naive p-value...... 0.00020385            0.1517 
-KS Statistic..........    0.22473           0.13571 
+var ratio (Tr/Co).....    0.68813            1.1165 
+T-test p-value........ 2.7506e-06           0.38152 
+KS Bootstrap p-value.. < 2.22e-16              0.09 
+KS Naive p-value...... 0.00020385           0.19748 
+KS Statistic..........    0.22473           0.12857 
 
 
 ***** (V6) covF2-Middle *****
@@ -1706,20 +1747,20 @@ T-test p-value........ 0.00023805          0.025801
 ***** (V8) Asqr *****
                        Before Matching       After Matching
 mean treatment........     11.301            11.301 
-mean control..........     10.219            10.741 
-std mean diff.........      16.05            8.3047 
+mean control..........     10.219            10.765 
+std mean diff.........      16.05              7.96 
 
-mean raw eQQ diff.....     1.2406           0.90447 
-med  raw eQQ diff.....      1.266           0.80625 
+mean raw eQQ diff.....     1.2406           0.88123 
+med  raw eQQ diff.....      1.266            0.6897 
 max  raw eQQ diff.....     3.2912              3.12 
 
-mean eCDF diff........   0.047314            0.0375 
+mean eCDF diff........   0.047314          0.036563 
 med  eCDF diff........   0.035165          0.035714 
 max  eCDF diff........    0.11868               0.1 
 
-var ratio (Tr/Co).....     1.2571            1.1742 
-T-test p-value........    0.11328           0.46523 
-KS Bootstrap p-value..      0.136             0.456 
+var ratio (Tr/Co).....     1.2571            1.1785 
+T-test p-value........    0.11328           0.48658 
+KS Bootstrap p-value..      0.136             0.454 
 KS Naive p-value......      0.154           0.48581 
 KS Statistic..........    0.11868               0.1 
 
@@ -1727,41 +1768,41 @@ KS Statistic..........    0.11868               0.1
 ***** (V9) BC *****
                        Before Matching       After Matching
 mean treatment........     4.9519            4.9519 
-mean control..........     2.9916            4.5069 
-std mean diff.........     39.082             8.873 
+mean control..........     2.9916            4.4176 
+std mean diff.........     39.082            10.653 
 
-mean raw eQQ diff.....     2.0337           0.72893 
-med  raw eQQ diff.....      0.055              0.01 
-max  raw eQQ diff.....        9.5              7.12 
+mean raw eQQ diff.....     2.0337           0.77793 
+med  raw eQQ diff.....      0.055             0.005 
+max  raw eQQ diff.....        9.5               7.2 
 
-mean eCDF diff........   0.089824          0.040026 
-med  eCDF diff........   0.066484          0.042857 
-max  eCDF diff........    0.23736               0.1 
+mean eCDF diff........   0.089824          0.040584 
+med  eCDF diff........   0.066484          0.039286 
+max  eCDF diff........    0.23736           0.10714 
 
-var ratio (Tr/Co).....     1.1009           0.91762 
-T-test p-value........ 0.00018579            0.4144 
-KS Bootstrap p-value.. < 2.22e-16              0.33 
-KS Naive p-value...... 7.0428e-05           0.48581 
-KS Statistic..........    0.23736               0.1 
+var ratio (Tr/Co).....     1.1009           0.92851 
+T-test p-value........ 0.00018579           0.32027 
+KS Bootstrap p-value.. < 2.22e-16             0.262 
+KS Naive p-value...... 7.0428e-05           0.39769 
+KS Statistic..........    0.23736           0.10714 
 
 
 ***** (V10) BD *****
                        Before Matching       After Matching
 mean treatment........       4.52              4.52 
-mean control..........     2.4404              3.83 
-std mean diff.........     44.618            14.804 
+mean control..........     2.4404            3.7843 
+std mean diff.........     44.618            15.785 
 
-mean raw eQQ diff.....     2.0993           0.69429 
+mean raw eQQ diff.....     2.0993              0.74 
 med  raw eQQ diff.....       0.65              0.15 
 max  raw eQQ diff.....        8.5               6.2 
 
-mean eCDF diff........    0.14507          0.053945 
+mean eCDF diff........    0.14507          0.055844 
 med  eCDF diff........    0.17527          0.057143 
 max  eCDF diff........    0.22308               0.1 
 
-var ratio (Tr/Co).....     1.4089            1.1006 
-T-test p-value........ 1.0928e-05           0.12636 
-KS Bootstrap p-value.. < 2.22e-16              0.33 
+var ratio (Tr/Co).....     1.4089            1.0975 
+T-test p-value........ 1.0928e-05           0.10115 
+KS Bootstrap p-value.. < 2.22e-16             0.332 
 KS Naive p-value...... 0.00023316           0.48581 
 KS Statistic..........    0.22308               0.1 
 
@@ -1769,10 +1810,10 @@ KS Statistic..........    0.22308               0.1
 ***** (V11) ps *****
                        Before Matching       After Matching
 mean treatment........    0.45945           0.45945 
-mean control..........    0.29107           0.41399 
-std mean diff.........     93.884            25.347 
+mean control..........    0.29107           0.41398 
+std mean diff.........     93.884            25.351 
 
-mean raw eQQ diff.....    0.16923           0.04573 
+mean raw eQQ diff.....    0.16923          0.045732 
 med  raw eQQ diff.....    0.17888          0.055288 
 max  raw eQQ diff.....     0.2476          0.098859 
 
@@ -1780,8 +1821,8 @@ mean eCDF diff........    0.24865          0.074643
 med  eCDF diff........    0.26429          0.067857 
 max  eCDF diff........    0.39341           0.17143 
 
-var ratio (Tr/Co).....    0.94368             1.224 
-T-test p-value........ < 2.22e-16        2.7037e-07 
+var ratio (Tr/Co).....    0.94368            1.2239 
+T-test p-value........ < 2.22e-16        2.6889e-07 
 KS Bootstrap p-value.. < 2.22e-16              0.04 
 KS Naive p-value...... 1.1692e-12          0.032675 
 KS Statistic..........    0.39341           0.17143 
@@ -1790,10 +1831,10 @@ KS Statistic..........    0.39341           0.17143
 ***** (V12) linps *****
                        Before Matching       After Matching
 mean treatment........   -0.18896          -0.18896 
-mean control..........    -1.0761          -0.38323 
-std mean diff.........      110.7            24.241 
+mean control..........    -1.0761          -0.38329 
+std mean diff.........      110.7            24.248 
 
-mean raw eQQ diff.....    0.89465           0.19591 
+mean raw eQQ diff.....    0.89465           0.19593 
 med  raw eQQ diff.....     0.9187           0.23821 
 max  raw eQQ diff.....     1.5824           0.47847 
 
@@ -1801,8 +1842,8 @@ mean eCDF diff........    0.24865          0.074643
 med  eCDF diff........    0.26429          0.067857 
 max  eCDF diff........    0.39341           0.17143 
 
-var ratio (Tr/Co).....    0.62742              1.24 
-T-test p-value........ < 2.22e-16        2.6553e-07 
+var ratio (Tr/Co).....    0.62742            1.2396 
+T-test p-value........ < 2.22e-16        2.6298e-07 
 KS Bootstrap p-value.. < 2.22e-16              0.04 
 KS Naive p-value...... 1.1692e-12          0.032675 
 KS Statistic..........    0.39341           0.17143 
@@ -1811,7 +1852,7 @@ KS Statistic..........    0.39341           0.17143
 Before Matching Minimum p.value: < 2.22e-16 
 Variable Name(s): covC covE BC BD ps linps  Number(s): 3 5 9 10 11 12 
 
-After Matching Minimum p.value: 2.6553e-07 
+After Matching Minimum p.value: 2.6298e-07 
 Variable Name(s): linps  Number(s): 12 
 ```
 
@@ -1853,17 +1894,17 @@ print(match_szd, digits=3)
 # A tibble: 12 x 4
    covnames      pre.szd post.szd row.names    
    <chr>           <dbl>    <dbl> <chr>        
- 1 covA            14.3      7.82 covA         
- 2 covB            45.4     12.8  covB         
- 3 covC           -49.6     -7.08 covC         
- 4 covD            23.8     -3.22 covD         
- 5 covE           -48.6    -11.8  covE         
+ 1 covA            14.3      7.49 covA         
+ 2 covB            45.4     14.2  covB         
+ 3 covC           -49.6     -7.14 covC         
+ 4 covD            23.8     -3.36 covD         
+ 5 covE           -48.6     -9.56 covE         
  6 covF - Middle    1.81   -13.2  covF - Middle
  7 covF - High     40.5     21.0  covF - High  
- 8 A^2             16.9      8.30 A^2          
- 9 B*C             40.0      8.87 B*C          
-10 B*D             48.3     14.8  B*D          
-11 raw PS          92.5     25.3  raw PS       
+ 8 A^2             16.9      7.96 A^2          
+ 9 B*C             40.0     10.7  B*C          
+10 B*D             48.3     15.8  B*D          
+11 raw PS          92.5     25.4  raw PS       
 12 linear PS       97.2     24.2  linear PS    
 ```
 
@@ -1897,19 +1938,19 @@ b
 
     Balance Measures
                      Type Diff.Adj
-    covA          Contin.   0.0782
-    covB           Binary   0.0643
-    covC          Contin.  -0.0708
-    covD          Contin.  -0.0322
-    covE          Contin.  -0.1182
+    covA          Contin.   0.0749
+    covB           Binary   0.0714
+    covC          Contin.  -0.0714
+    covD          Contin.  -0.0336
+    covE          Contin.  -0.0956
     covF_1-Low     Binary  -0.0357
     covF_2-Middle  Binary  -0.0643
     covF_3-High    Binary   0.1000
-    Asqr          Contin.   0.0830
-    BC            Contin.   0.0887
-    BD            Contin.   0.1480
+    Asqr          Contin.   0.0796
+    BC            Contin.   0.1065
+    BD            Contin.   0.1578
     ps            Contin.   0.2535
-    linps         Contin.   0.2424
+    linps         Contin.   0.2425
     
     Sample sizes
               Control Treated
@@ -1962,13 +2003,13 @@ print(match_vrat, digits=2)
    <chr>              <dbl>       <dbl> <chr>        
  1 covA               1.08        1.00  covA         
  2 covB               1.20        1.01  covB         
- 3 covC               0.838       0.898 covC         
- 4 covD               0.887       1.12  covD         
- 5 covE               0.688       1.11  covE         
+ 3 covC               0.838       0.882 covC         
+ 4 covD               0.887       1.11  covD         
+ 5 covE               0.688       1.12  covE         
  6 covF - Middle      1.01        0.957 covF - Middle
  7 covF - High        1.61        1.23  covF - High  
- 8 A^2                1.26        1.17  A^2          
- 9 B*C                1.10        0.918 B*C          
+ 8 A^2                1.26        1.18  A^2          
+ 9 B*C                1.10        0.929 B*C          
 10 B*D                1.41        1.10  B*D          
 11 raw PS             0.944       1.22  raw PS       
 12 linear PS          0.627       1.24  linear PS    
@@ -2004,21 +2045,21 @@ head(toy.matchedsample)
 ``` 
   matches subject treated covA covB  covC covD covE     covF out1.cost
 1       2   T_260       0 3.08    1 10.30  9.4   10    1-Low        42
-2       5   T_138       0 3.84    0  9.82  9.0   10    1-Low        58
+2       5   T_008       0 2.58    0 12.60  5.2    4 2-Middle        53
 3      11   T_190       0 2.86    0  7.50 12.0    5   3-High        39
 4      14   T_235       0 3.87    1 10.20  9.5    7 2-Middle        51
 5      15   T_297       0 4.01    0  9.00 12.7   13 2-Middle        49
 6      17   T_261       0 5.35    1  5.56 10.3   10 2-Middle        82
   out2.event out3.time treated_f covB_f   out2_f out2 covF.Low covF.Middle
 1         No       127   Control  Has B No Event    0        1           0
-2        Yes        92   Control   No B    Event    1        1           0
+2        Yes       122   Control   No B    Event    1        0           1
 3         No       105   Control   No B No Event    0        0           0
 4         No       108   Control  Has B No Event    0        0           1
 5         No       111   Control   No B No Event    0        0           1
 6        Yes       114   Control  Has B    Event    1        0           1
   covF.High    Asqr    BC   BD        ps      linps exposure
 1         0  9.4864 10.30  9.4 0.4351701 -0.2607876        0
-2         0 14.7456  0.00  0.0 0.2450288 -1.1253040        0
+2         0  6.6564  0.00  0.0 0.2453193 -1.1237342        0
 3         1  8.1796  0.00  0.0 0.7704718  1.2109770        0
 4         0 14.9769 10.20  9.5 0.6434764  0.5904848        0
 5         0 16.0801  0.00  0.0 0.2989950 -0.8520883        0
@@ -2051,7 +2092,7 @@ rubin1.match <- with(toy.matchedsample,
 rubin1.match
 ```
 
-    [1] 25.34537
+    [1] 25.3516
 
 Here, we’ve at least got this value down below 50%, so we would pass
 Rule 1, although perhaps a different propensity score adjustment
@@ -2082,7 +2123,7 @@ rubin2.match <- with(toy.matchedsample, var(linps[treated==1])/var(linps[treated
 rubin2.match
 ```
 
-    [1] 1.240001
+    [1] 1.239611
 
 This is moderately promising - a substantial improvement over our
 unadjusted result, and now, just barely within our desired range of 4/5
@@ -2142,15 +2183,15 @@ rubin3.matched
        name        resid.var.ratio
        <chr>                 <dbl>
      1 covA                  1.00 
-     2 covB                  1.15 
-     3 covC                  0.803
-     4 covD                  1.13 
-     5 covE                  0.954
+     2 covB                  1.19 
+     3 covC                  0.791
+     4 covD                  1.12 
+     5 covE                  0.923
      6 covF.Middle           0.929
      7 covF.High             1.24 
      8 Asqr                  1.18 
-     9 BC                    0.982
-    10 BD                    1.28 
+     9 BC                    1.02 
+    10 BD                    1.30 
 
 It looks like the results are basically unchanged, except that
 `covF.High` is improved. The dotplot of these results comparing pre- to
@@ -2277,7 +2318,7 @@ adj.m.out1.tidy
     # A tibble: 1 x 7
       term    estimate std.error statistic      p.value conf.low conf.high
       <chr>      <dbl>     <dbl>     <dbl>        <dbl>    <dbl>     <dbl>
-    1 treated     9.78      1.62      6.03 0.0000000138     6.57      13.0
+    1 treated     9.74      1.62      6.01 0.0000000155     6.53      12.9
 
 So, this regression approach produces an estimate that is exactly the
 same as the paired t test\[2\], but this isn’t something I’m completely
@@ -2304,33 +2345,33 @@ summary(matched_mixedmodel.out1); confint(matched_mixedmodel.out1)
     Formula: out1.cost ~ treated + (1 | matches.f)
        Data: toy.matchedsample
     
-    REML criterion at convergence: 2296.5
+    REML criterion at convergence: 2296.6
     
     Scaled residuals: 
          Min       1Q   Median       3Q      Max 
-    -2.43776 -0.69141 -0.02121  0.63760  2.17585 
+    -2.43672 -0.70746 -0.01428  0.63760  2.17127 
     
     Random effects:
      Groups    Name        Variance Std.Dev.
-     matches.f (Intercept)  38.0     6.164  
-     Residual              183.9    13.562  
+     matches.f (Intercept)  38.37    6.194  
+     Residual              183.70   13.554  
     Number of obs: 280, groups:  matches.f, 140
     
     Fixed effects:
                 Estimate Std. Error t value
-    (Intercept)   46.864      1.259  37.223
-    treated        9.779      1.621   6.033
+    (Intercept)   46.907      1.259   37.24
+    treated        9.736      1.620    6.01
     
     Correlation of Fixed Effects:
             (Intr)
-    treated -0.644
+    treated -0.643
 
 ``` 
                 2.5 %    97.5 %
-.sig01       3.149431  8.829642
-.sigma      12.072612 15.264808
-(Intercept) 44.396784 49.331787
-treated      6.591111 12.966032
+.sig01       2.244997  8.853309
+.sigma      12.065418 15.255721
+(Intercept) 44.438809 49.375476
+treated      6.550153 12.921275
 ```
 
 The `tidy` approach works with this linear mixed model, so we have:
@@ -2345,9 +2386,9 @@ res_matched_1
     # A tibble: 1 x 7
       term    estimate std.error statistic conf.low conf.high group
       <chr>      <dbl>     <dbl>     <dbl>    <dbl>     <dbl> <chr>
-    1 treated     9.78      1.62      6.03     6.60      13.0 fixed
+    1 treated     9.74      1.62      6.01     6.56      12.9 fixed
 
-Our estimate is 9.78, with 95% CI ranging from 6.60 to 12.96.
+Our estimate is 9.74, with 95% CI ranging from 6.56 to 12.91.
 
 ### Practically, does any of this matter in this example?
 
@@ -2356,8 +2397,8 @@ Not much in this example, no, as long as you stick to ATT approaches.
 |                             Approach | Effect Estimate | Standard Error | 95% CI        |
 | -----------------------------------: | --------------: | -------------: | ------------- |
 |          “Automated” ATT via `Match` |            9.78 |           1.61 | (6.62, 12.94) |
-| Linear Model (pairs as fixed factor) |            9.78 |           1.62 | (6.57, 12.98) |
-| Mixed Model (pairs as random factor) |            9.78 |           1.62 | (6.60, 12.96) |
+| Linear Model (pairs as fixed factor) |            9.74 |           1.62 | (6.53, 12.94) |
+| Mixed Model (pairs as random factor) |            9.74 |           1.62 | (6.56, 12.91) |
 
 ## Outcome 2 (a binary outcome)
 
@@ -2417,20 +2458,20 @@ summary(adj.m.out2)
     coxph(formula = Surv(rep(1, 280L), out2) ~ treated + strata(matches), 
         data = toy.matchedsample, method = "exact")
     
-      n= 280, number of events= 144 
+      n= 280, number of events= 145 
     
               coef exp(coef) se(coef)     z Pr(>|z|)  
-    treated 0.5245    1.6897   0.2343 2.239   0.0252 *
+    treated 0.5039    1.6552   0.2352 2.143   0.0322 *
     ---
     Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     
             exp(coef) exp(-coef) lower .95 upper .95
-    treated      1.69     0.5918     1.068     2.674
+    treated     1.655     0.6042     1.044     2.624
     
-    Concordance= 0.628  (se = 0.077 )
-    Likelihood ratio test= 5.19  on 1 df,   p=0.02
-    Wald test            = 5.01  on 1 df,   p=0.03
-    Score (logrank) test = 5.13  on 1 df,   p=0.02
+    Concordance= 0.623  (se = 0.078 )
+    Likelihood ratio test= 4.74  on 1 df,   p=0.03
+    Wald test            = 4.59  on 1 df,   p=0.03
+    Score (logrank) test = 4.69  on 1 df,   p=0.03
 
 The odds ratio in the `exp(coef)` section above is the average causal
 effect estimate - it describes the odds of having an event (`out2`)
@@ -2448,10 +2489,10 @@ adj.m.out2_tidy
     # A tibble: 1 x 7
       term    estimate std.error statistic p.value conf.low conf.high
       <chr>      <dbl>     <dbl>     <dbl>   <dbl>    <dbl>     <dbl>
-    1 treated     1.69     0.234      2.24  0.0252     1.07      2.67
+    1 treated     1.66     0.235      2.14  0.0322     1.04      2.62
 
-Our point estimate is 1.69, with standard error 0.23, and 95% CI ranging
-from 1.07 to 2.67.
+Our point estimate is 1.66, with standard error 0.24, and 95% CI ranging
+from 1.04 to 2.62.
 
   - I’ll use this conditional logistic regression approach to summarize
     the findings with regard to an odds ratio in my summary of matching
@@ -2489,7 +2530,7 @@ summary(adj.m.out3)
     coxph(formula = Surv(out3.time, out2) ~ treated + strata(matches), 
         data = toy.matchedsample)
     
-      n= 280, number of events= 144 
+      n= 280, number of events= 145 
     
               coef exp(coef) se(coef)     z Pr(>|z|)   
     treated 0.5845    1.7941   0.2140 2.731  0.00631 **
@@ -2529,8 +2570,8 @@ cox.zph(adj.m.out3) # Quick check for proportional hazards assumption
 
 ``` 
         chisq df    p
-treated 0.489  1 0.48
-GLOBAL  0.489  1 0.48
+treated 0.488  1 0.49
+GLOBAL  0.488  1 0.49
 ```
 
 ``` r
@@ -2553,8 +2594,8 @@ entirely, so as to discourage you from using it.
 |                   (unadjusted) |          (6.75, 12.52) |         (0.075, 0.275) |           (1.36, 3.13) |                     (1.62, 2.90) |
 |             After 1:1 PS Match |               **9.78** |              **0.136** |                    N/A |                              N/A |
 |           (`Match`: Automated) |          (6.62, 12.94) |         (0.015, 0.256) |                    N/A |                              N/A |
-|             After 1:1 PS Match |               **9.78** |                    N/A |               **1.69** |                         **1.79** |
-|          (“Regression” Models) |          (6.60, 12.96) |                    N/A |           (1.07, 2.67) |                     (1.18, 2.73) |
+|             After 1:1 PS Match |               **9.74** |                    N/A |               **1.66** |                         **1.79** |
+|          (“Regression” Models) |          (6.56, 12.91) |                    N/A |           (1.04, 2.62) |                     (1.18, 2.73) |
 
 # Task 6. Subclassify by PS quintile, then display post-subclassification balance
 
@@ -3171,8 +3212,8 @@ quintiles, especially Quintile 1.
 |                   (unadjusted) |          (6.75, 12.52) |         (0.075, 0.275) |           (1.36, 3.13) |                     (1.62, 2.90) |
 |             After 1:1 PS Match |               **9.78** |              **0.136** |                    N/A |                              N/A |
 |           (`Match`: Automated) |          (6.62, 12.94) |         (0.015, 0.256) |                    N/A |                              N/A |
-|             After 1:1 PS Match |               **9.78** |                    N/A |               **1.69** |                         **1.79** |
-|          (“Regression” Models) |          (6.60, 12.96) |                    N/A |           (1.07, 2.67) |                     (1.18, 2.73) |
+|             After 1:1 PS Match |               **9.74** |                    N/A |               **1.66** |                         **1.79** |
+|          (“Regression” Models) |          (6.56, 12.91) |                    N/A |           (1.04, 2.62) |                     (1.18, 2.73) |
 |     After PS Subclassification |               **5.79** |                    N/A |               **1.94** |                         **1.98** |
 |     (“Regression” models, ATE) |           (2.32, 9.26) |                    N/A |           (1.11, 9.26) |                     (1.41, 2.77) |
 
@@ -3724,8 +3765,8 @@ wt_twangatt_results3 <- tidy(adjout3.wt3, exponentiate = TRUE) %>%
 |                   (unadjusted) |          (6.75, 12.52) |         (0.075, 0.275) |           (1.36, 3.13) |        (1.62, 2.90) |
 |             After 1:1 PS Match |               **9.78** |              **0.136** |                    N/A |                 N/A |
 |           (`Match`: Automated) |          (6.62, 12.94) |         (0.015, 0.256) |                    N/A |                 N/A |
-|             After 1:1 PS Match |               **9.78** |                    N/A |               **1.69** |            **1.79** |
-|          (“Regression” Models) |          (6.60, 12.96) |                    N/A |           (1.07, 2.67) |        (1.18, 2.73) |
+|             After 1:1 PS Match |               **9.74** |                    N/A |               **1.66** |            **1.79** |
+|          (“Regression” Models) |          (6.56, 12.91) |                    N/A |           (1.04, 2.62) |        (1.18, 2.73) |
 |     After PS Subclassification |               **5.79** |                    N/A |               **1.94** |            **1.98** |
 |     (“Regression” models, ATE) |           (2.32, 9.26) |                    N/A |           (1.11, 9.26) |        (1.41, 2.77) |
 |                  ATT Weighting |               **7.70** |                    N/A |               **1.59** |            **1.76** |
@@ -3813,8 +3854,8 @@ plot(cox.zph(adj.reg.out3), var="linps")
 |                   (unadjusted) |          (6.75, 12.52) |         (0.075, 0.275) |           (1.36, 3.13) |        (1.62, 2.90) |
 |             After 1:1 PS Match |               **9.78** |              **0.136** |                    N/A |                 N/A |
 |           (`Match`: Automated) |          (6.62, 12.94) |         (0.015, 0.256) |                    N/A |                 N/A |
-|             After 1:1 PS Match |               **9.78** |                    N/A |               **1.69** |            **1.79** |
-|          (“Regression” Models) |          (6.60, 12.96) |                    N/A |           (1.07, 2.67) |        (1.18, 2.73) |
+|             After 1:1 PS Match |               **9.74** |                    N/A |               **1.66** |            **1.79** |
+|          (“Regression” Models) |          (6.56, 12.91) |                    N/A |           (1.04, 2.62) |        (1.18, 2.73) |
 |     After PS Subclassification |               **5.79** |                    N/A |               **1.94** |            **1.98** |
 |     (“Regression” models, ATE) |           (2.32, 9.26) |                    N/A |           (1.11, 9.26) |        (1.41, 2.77) |
 |                  ATT Weighting |               **7.70** |                    N/A |               **1.59** |            **1.76** |
@@ -4055,8 +4096,8 @@ here.
 |                   (unadjusted) |          (6.75, 12.52) |         (0.075, 0.275) |           (1.36, 3.13) |        (1.62, 2.90) |
 |             After 1:1 PS Match |               **9.78** |              **0.136** |                    N/A |                 N/A |
 |           (`Match`: Automated) |          (6.62, 12.94) |         (0.015, 0.256) |                    N/A |                 N/A |
-|             After 1:1 PS Match |               **9.78** |                    N/A |               **1.69** |            **1.79** |
-|          (“Regression” Models) |          (6.60, 12.96) |                    N/A |           (1.07, 2.67) |        (1.18, 2.73) |
+|             After 1:1 PS Match |               **9.74** |                    N/A |               **1.66** |            **1.79** |
+|          (“Regression” Models) |          (6.56, 12.91) |                    N/A |           (1.04, 2.62) |        (1.18, 2.73) |
 |     After PS Subclassification |               **5.79** |                    N/A |               **1.94** |            **1.98** |
 |     (“Regression” models, ATE) |           (2.32, 9.26) |                    N/A |           (1.11, 9.26) |        (1.41, 2.77) |
 |                  ATT Weighting |               **7.70** |                    N/A |               **1.59** |            **1.76** |
@@ -4091,7 +4132,7 @@ propensity scores …
 | ---------------------------: | ------------------: | -------------------: |
 |        Most Desirable Values | Between -10 and +10 | Between 0.8 and 1.25 |
 |               No Adjustments |          \-50 to 97 |         0.63 to 1.61 |
-|      1:1 Propensity Matching |          \-13 to 25 |         0.90 to 1.24 |
+|      1:1 Propensity Matching |          \-13 to 25 |         0.88 to 1.24 |
 | Subclassification Quintile 1 |        \-161 to 212 | not calculated above |
 |                   Quintile 2 |          \-32 to 71 | not calculated above |
 |                   Quintile 3 |          \-33 to 60 | not calculated above |
@@ -4106,7 +4147,7 @@ propensity scores …
 | ----------------------------: | ------: | ---------: | ------------: |
 |       “Pass” Range, per Rubin | 0 to 50 | 0.5 to 2.0 |    0.5 to 2.0 |
 |                No Adjustments |    85.9 |       0.63 |  0.72 to 1.76 |
-|       1:1 Propensity Matching |    25.3 |       1.24 |  0.80 to 1.28 |
+|       1:1 Propensity Matching |    25.4 |       1.24 |  0.79 to 1.30 |
 | Subclassification: Quintile 1 |   125.8 |       0.01 |  0.00 to 0.96 |
 |                    Quintile 2 |    14.8 |       2.17 | 0.42 to 11.33 |
 |                    Quintile 3 |    22.1 |       1.05 |  0.41 to 2.20 |
