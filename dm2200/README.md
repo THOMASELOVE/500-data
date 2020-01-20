@@ -8,4 +8,10 @@ Here is the [Github Markdown file](https://github.com/THOMASELOVE/500-data/blob/
 
 The `dm2200.csv` data file, in [raw, downloadable form](https://raw.githubusercontent.com/THOMASELOVE/500-data/master/dm2200/data/dm2200.csv).
 
-The purpose of this (simulated) example is to demonstrate a range of propensity score matching methods in R.
+The purpose of this (simulated) example is to demonstrate a range of propensity score matching methods in R. As of the most recent update, this includes:
+
+- Using the `Matching` package
+    1. 1:1 matching without replacement
+    2. 1:2 matching without replacement
+    3. 1:3 matching with replacement
+
