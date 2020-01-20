@@ -1,0 +1,11 @@
+# Propensity Matching with the `dm2200` Example 
+
+The entire example can be downloaded from the front page of the 500-data website.
+
+Here is the [R Markdown file](https://github.com/THOMASELOVE/500-data/blob/master/dm2200/matching_with_dm2200.Rmd) including all code.
+
+Here is the [Github Markdown file](https://github.com/THOMASELOVE/500-data/blob/master/dm2200/matching_with_dm2200.md) which displays the code and its results.
+
+The `dm2200.csv` data file, in [raw, downloadable form](https://raw.githubusercontent.com/THOMASELOVE/500-data/master/dm2200/data/dm2200.csv).
+
+The purpose of this (simulated) example is to demonstrate a range of propensity score matching methods in R.
