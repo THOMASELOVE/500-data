@@ -1,7 +1,7 @@
 Propensity Matching and the dm2200 Data
 ================
 Thomas E. Love, Ph.D.
-2020-01-19
+2020-01-20
 
   - [Setup](#setup)
   - [The `dm2200` data set](#the-dm2200-data-set)
@@ -12,8 +12,8 @@ Thomas E. Love, Ph.D.
       - [Fitting a Propensity Model](#fitting-a-propensity-model)
           - [Storing the Propensity
             Scores](#storing-the-propensity-scores)
-  - [`match1` 1:1 greedy matching without
-    replacement](#match1-11-greedy-matching-without-replacement)
+  - [`match_1` 1:1 greedy matching without
+    replacement](#match_1-11-greedy-matching-without-replacement)
       - [Obtaining the Matched Sample](#obtaining-the-matched-sample)
       - [Checking Covariate Balance for our 1:1 Greedy
         Match](#checking-covariate-balance-for-our-11-greedy-match)
@@ -27,6 +27,36 @@ Thomas E. Love, Ph.D.
             Differences](#using-love.plot-to-look-at-standardized-differences)
           - [Using `love.plot` to look at Variance
             Ratios](#using-love.plot-to-look-at-variance-ratios)
+  - [`match_2` 1:2 greedy matching without
+    replacement](#match_2-12-greedy-matching-without-replacement)
+      - [Obtaining the Matched Sample](#obtaining-the-matched-sample-1)
+      - [Checking Covariate Balance for our 1:2 Greedy
+        Match](#checking-covariate-balance-for-our-12-greedy-match)
+          - [Using `bal.tab` to obtain a balance
+            table](#using-bal.tab-to-obtain-a-balance-table-1)
+          - [Checking Rubin’s Rules 1 and
+            2](#checking-rubins-rules-1-and-2-1)
+          - [Using `bal.plot` from
+            `cobalt`](#using-bal.plot-from-cobalt-1)
+          - [Using `love.plot` to look at Standardized
+            Differences](#using-love.plot-to-look-at-standardized-differences-1)
+          - [Using `love.plot` to look at Variance
+            Ratios](#using-love.plot-to-look-at-variance-ratios-1)
+  - [`match_3` 1:3 greedy matching, with
+    replacement](#match_3-13-greedy-matching-with-replacement)
+      - [Obtaining the Matched Sample](#obtaining-the-matched-sample-2)
+      - [Checking Covariate Balance for our 1:2 Greedy
+        Match](#checking-covariate-balance-for-our-12-greedy-match-1)
+          - [Using `bal.tab` to obtain a balance
+            table](#using-bal.tab-to-obtain-a-balance-table-2)
+          - [Checking Rubin’s Rules 1 and
+            2](#checking-rubins-rules-1-and-2-2)
+          - [Using `bal.plot` from
+            `cobalt`](#using-bal.plot-from-cobalt-2)
+          - [Using `love.plot` to look at Standardized
+            Differences](#using-love.plot-to-look-at-standardized-differences-2)
+          - [Using `love.plot` to look at Variance
+            Ratios](#using-love.plot-to-look-at-variance-ratios-2)
   - [Outcome Models](#outcome-models)
       - [Unadjusted Models prior to Propensity
         Matching](#unadjusted-models-prior-to-propensity-matching)
@@ -38,16 +68,23 @@ Thomas E. Love, Ph.D.
         `match1`](#adjusted-outcome-models-after-match1)
           - [Binary Outcome: `bp_good`](#binary-outcome-bp_good)
           - [Quantitative Outcome: `bmi`](#quantitative-outcome-bmi)
-      - [Key References](#key-references)
+      - [Adjusted Outcome Models after
+        `match2`](#adjusted-outcome-models-after-match2)
+          - [Binary Outcome: `bp_good`](#binary-outcome-bp_good-1)
+          - [Quantitative Outcome: `bmi`](#quantitative-outcome-bmi-1)
+      - [Adjusted Outcome Models after
+        `match3`](#adjusted-outcome-models-after-match3)
+          - [Binary Outcome: `bp_good`](#binary-outcome-bp_good-2)
+          - [Quantitative Outcome: `bmi`](#quantitative-outcome-bmi-2)
+  - [Cleanup](#cleanup)
+  - [Key References](#key-references)
 
 This document will eventually demonstrate multiple matching strategies
 incorporating the propensity score, including the assessment of
 covariate balance before and after matching. We focus on binary and
 quantitative outcomes in a (simulated) electronic health records data
-setting. It uses the `cobalt` package extensively.
-
-  - Greifer, N. (2020). cobalt: Covariate Balance Tables and Plots. R
-    package version 4.0.0.
+setting. It uses the `cobalt` package extensively. See the Key
+References section at the end of the document.
 
 ## Setup
 
@@ -289,7 +326,7 @@ ggplot(dm2200, aes(x = exposure, y = linps)) +
 
 ![](matching_with_dm2200_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
-# `match1` 1:1 greedy matching without replacement
+# `match_1` 1:1 greedy matching without replacement
 
 We’re going to match on the linear propensity score, and define our
 `treat` (treatment) as occurring when `exposure` is A.
@@ -344,22 +381,22 @@ dm2200_matched1 %>% head()
 ```
 
 ``` 
-  match1_matches subject exposure age     race hisp sex     insur nincome
-1              1  S-0728        B  64 Black_AA    0   F  Medicaid   12600
-2              4  S-1650        B  48 Black_AA    0   M  Medicaid   22100
-3             17  S-0834        B  61 Black_AA    0   M  Medicaid   31500
-4             26  S-1232        B  69 Black_AA    0   F  Medicare   21700
-5             27  S-0678        B  36 Black_AA    0   F  Medicaid   16600
-6             37  S-0765        B  39 Black_AA    0   M Uninsured   35000
+  match1_matches subject exposure age     race hisp sex      insur nincome
+1              1  S-1976        B  43 Black_AA    0   M Commercial   35800
+2              4  S-1650        B  48 Black_AA    0   M   Medicaid   22100
+3             17  S-0834        B  61 Black_AA    0   M   Medicaid   31500
+4             26  S-1232        B  69 Black_AA    0   F   Medicare   21700
+5             27  S-0678        B  36 Black_AA    0   F   Medicaid   16600
+6             37  S-0765        B  39 Black_AA    0   M  Uninsured   35000
   nhsgrad cleve height_cm weight_kg  bmi  a1c sbp dbp ldl visits tobacco statin
-1      78     1       152        81 35.1  6.9 134  76 140      3  Former      1
+1      56     1       180       138 42.6  9.3 140  88  73      5  Former      1
 2      80     1       172       134 45.3  5.1  98  66 121      3   Never      1
 3      80     1       183        94 28.1  6.5 127  79 137      3 Current      1
 4      77     1       168        65 23.0  5.9 101  70  76      2 Current      1
 5      79     1       160        80 31.3 14.5 142  95 157      5 Current      1
 6      82     0       185       125 36.5  7.3 138  83 119      4 Current      1
   ace_arb betab depr_dx eyeex pneumo bp_good treat         ps      linps
-1       1     1       1     1      1       1 FALSE 0.03767221 -3.2404325
+1       1     1       0     0      1       0 FALSE 0.03772165 -3.2390696
 2       1     0       0     0      0       1 FALSE 0.62855155  0.5260079
 3       1     0       1     0      1       1 FALSE 0.33963493 -0.6649215
 4       1     0       0     1      1       1 FALSE 0.07464006 -2.5175054
@@ -387,34 +424,34 @@ bal1
 
     Balance Measures
                         Type Diff.Un V.Ratio.Un Diff.Adj V.Ratio.Adj
-    age              Contin.  0.4076     1.3195  -0.0321      1.2044
+    age              Contin.  0.4076     1.3195  -0.0829      1.2802
     race_Asian        Binary  0.0025             -0.0050            
-    race_Black_AA     Binary -0.2975              0.0050            
+    race_Black_AA     Binary -0.2975              0.0250            
     race_Other        Binary  0.0320              0.0000            
-    race_White        Binary  0.2630              0.0000            
-    hisp              Binary  0.0320              0.0000            
-    sex_M             Binary -0.2190             -0.0400            
-    insur_Commercial  Binary  0.2200              0.0100            
-    insur_Medicaid    Binary -0.3745              0.0100            
-    insur_Medicare    Binary  0.2715              0.0050            
-    insur_Uninsured   Binary -0.1170             -0.0250            
-    nincome          Contin.  0.5306     3.2086  -0.0046      1.4150
-    nhsgrad          Contin.  0.3958     0.9727   0.0167      0.9324
+    race_White        Binary  0.2630             -0.0200            
+    hisp              Binary  0.0320             -0.0050            
+    sex_M             Binary -0.2190             -0.0500            
+    insur_Commercial  Binary  0.2200              0.0000            
+    insur_Medicaid    Binary -0.3745             -0.0100            
+    insur_Medicare    Binary  0.2715              0.0250            
+    insur_Uninsured   Binary -0.1170             -0.0150            
+    nincome          Contin.  0.5306     3.2086  -0.0586      1.1491
+    nhsgrad          Contin.  0.3958     0.9727  -0.0308      0.8213
     cleve             Binary -0.3505              0.0100            
-    a1c              Contin. -0.0419     0.8190   0.0008      1.0297
-    ldl              Contin.  0.0783     0.9012   0.0097      0.9210
-    visits           Contin. -0.6304     0.4602  -0.2529      0.8388
-    tobacco_Current   Binary -0.3175             -0.0300            
-    tobacco_Former    Binary  0.1575              0.0250            
-    tobacco_Never     Binary  0.1600              0.0050            
-    statin            Binary  0.0315             -0.0600            
-    ace_arb           Binary -0.0345             -0.0450            
-    betab             Binary  0.1255              0.0550            
-    depr_dx           Binary  0.1115             -0.0100            
-    eyeex             Binary  0.0925              0.0350            
-    pneumo            Binary  0.3030              0.0900            
-    ps               Contin. -2.9189     0.1576  -0.7380      0.4789
-    linps            Contin. -1.7842     1.3395  -0.2125      0.5376
+    a1c              Contin. -0.0419     0.8190  -0.0173      1.1044
+    ldl              Contin.  0.0783     0.9012   0.0003      0.9000
+    visits           Contin. -0.6304     0.4602  -0.2417      0.8468
+    tobacco_Current   Binary -0.3175             -0.0200            
+    tobacco_Former    Binary  0.1575              0.0450            
+    tobacco_Never     Binary  0.1600             -0.0250            
+    statin            Binary  0.0315             -0.0450            
+    ace_arb           Binary -0.0345             -0.0300            
+    betab             Binary  0.1255              0.0300            
+    depr_dx           Binary  0.1115              0.0350            
+    eyeex             Binary  0.0925              0.0400            
+    pneumo            Binary  0.3030              0.0950            
+    ps               Contin. -2.9189     0.1576  -0.7383      0.4790
+    linps            Contin. -1.7842     1.3395  -0.2126      0.5379
     
     Sample sizes
                 A    B
@@ -428,12 +465,12 @@ We’ll build a little table of the Rubin’s Rules (1 and 2) before and
 after our `match_1` is applied.
 
 ``` r
-covs_2plus <- dm2200 %>%
+covs_for_rubin <- dm2200 %>%
     select(linps)
 
 rubin_m1 <- bal.tab(M = match_1,
                 treat = dm2200$treat,
-                covs = covs_2plus, 
+                covs = covs_for_rubin, 
                 un = TRUE, disp.v.ratio = TRUE)[1]
 
 rubin_report_m1 <- tibble(
@@ -458,12 +495,12 @@ rubin_report_m1 %>% knitr::kable(digits = 2)
       - Multiply these by 100 to describe them as percentages, adjusting
         the cutoff to below 50 in absolute value.
       - Here, before matching we have a bias of 206.5005338%, and this
-        is reduced to 24.5889855% after 1:1 greedy matching.
+        is reduced to 24.6094253% after 1:1 greedy matching.
   - The Rule 2 results tell us about the variance ratio of the linear
     propensity scores. We want this to be within (0.5, 2) and ideally
     within (0.8, 1.25).
       - Here, before matching we have a variance ratio of 74.6560482%,
-        and this becomes 185.9963419% after 1:1 greedy matching.
+        and this becomes 185.9035307% after 1:1 greedy matching.
 
 ### Using `bal.plot` from `cobalt`
 
@@ -557,6 +594,494 @@ love.plot(bal1,
 
 ![](matching_with_dm2200_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
+# `match_2` 1:2 greedy matching without replacement
+
+Again, we’ll match on the linear propensity score, and define our
+`treat` (treatment) as occurring when `exposure` is A. The only
+difference will be that we’ll allow each subject with exposure A to be
+matched to exactly two subjects with exposure B.
+
+``` r
+match_2 <- Match(Tr = dm2200$treat, X = dm2200$linps, 
+                 M = 2, replace = FALSE, ties = FALSE,
+                 estimand = "ATT")
+
+summary(match_2)
+```
+
+``` 
+
+Estimate...  0 
+SE.........  0 
+T-stat.....  NaN 
+p.val......  NA 
+
+Original number of observations..............  2200 
+Original number of treated obs...............  200 
+Matched number of observations...............  200 
+Matched number of observations  (unweighted).  400 
+```
+
+Note that we now have 400 matched exposure “B” subjects in our matched
+sample.
+
+## Obtaining the Matched Sample
+
+As before,
+
+``` r
+match2_matches <- factor(rep(match_2$index.treated, 2))
+dm2200_matched2 <- cbind(match2_matches, 
+                         dm2200[c(match_2$index.control, 
+                                  match_2$index.treated),])
+```
+
+How many unique subjects are in our matched sample?
+
+``` r
+dm2200_matched2 %$% n_distinct(subject)
+```
+
+    [1] 600
+
+This match repeats each exposure A subject twice, to match up with the
+400 exposure B subjects.
+
+``` r
+dm2200_matched2 %>% count(exposure)
+```
+
+    # A tibble: 2 x 2
+      exposure     n
+      <fct>    <int>
+    1 A          400
+    2 B          400
+
+``` r
+dm2200_matched2 %>% count(subject, exposure)
+```
+
+    # A tibble: 600 x 3
+       subject exposure     n
+       <chr>   <fct>    <int>
+     1 S-0001  A            2
+     2 S-0004  A            2
+     3 S-0007  B            1
+     4 S-0008  B            1
+     5 S-0010  B            1
+     6 S-0014  B            1
+     7 S-0017  A            2
+     8 S-0019  B            1
+     9 S-0020  B            1
+    10 S-0026  A            2
+    # ... with 590 more rows
+
+## Checking Covariate Balance for our 1:2 Greedy Match
+
+### Using `bal.tab` to obtain a balance table
+
+``` r
+covs_2plus <- dm2200 %>%
+    select(age, race, hisp, sex, insur, nincome,
+           nhsgrad, cleve, a1c, ldl, visits, tobacco,
+           statin, ace_arb, betab, depr_dx, eyeex, pneumo,
+           ps, linps)
+
+bal2 <- bal.tab(M = match_2,
+                treat = dm2200$exposure,
+                covs = covs_2plus, quick = FALSE,
+                un = TRUE, disp.v.ratio = TRUE)
+bal2
+```
+
+    Balance Measures
+                        Type Diff.Un V.Ratio.Un Diff.Adj V.Ratio.Adj
+    age              Contin.  0.4076     1.3195   0.0735      1.2853
+    race_Asian        Binary  0.0025              0.0000            
+    race_Black_AA     Binary -0.2975             -0.0175            
+    race_Other        Binary  0.0320              0.0000            
+    race_White        Binary  0.2630              0.0175            
+    hisp              Binary  0.0320              0.0050            
+    sex_M             Binary -0.2190             -0.0875            
+    insur_Commercial  Binary  0.2200             -0.0050            
+    insur_Medicaid    Binary -0.3745             -0.0375            
+    insur_Medicare    Binary  0.2715              0.0850            
+    insur_Uninsured   Binary -0.1170             -0.0425            
+    nincome          Contin.  0.5306     3.2086  -0.0293      1.3413
+    nhsgrad          Contin.  0.3958     0.9727   0.0088      1.0819
+    cleve             Binary -0.3505             -0.0175            
+    a1c              Contin. -0.0419     0.8190  -0.0144      0.8941
+    ldl              Contin.  0.0783     0.9012  -0.0057      0.9469
+    visits           Contin. -0.6304     0.4602  -0.3274      0.7092
+    tobacco_Current   Binary -0.3175             -0.1000            
+    tobacco_Former    Binary  0.1575              0.0575            
+    tobacco_Never     Binary  0.1600              0.0425            
+    statin            Binary  0.0315              0.0050            
+    ace_arb           Binary -0.0345             -0.0250            
+    betab             Binary  0.1255              0.0350            
+    depr_dx           Binary  0.1115              0.0550            
+    eyeex             Binary  0.0925              0.0425            
+    pneumo            Binary  0.3030              0.1475            
+    ps               Contin. -2.9189     0.1576  -1.4657      0.3429
+    linps            Contin. -1.7842     1.3395  -0.4323      0.4095
+    
+    Sample sizes
+                A    B
+    All       200 2000
+    Matched   200  400
+    Unmatched   0 1600
+
+### Checking Rubin’s Rules 1 and 2
+
+We’ll build a little table of the Rubin’s Rules (1 and 2) before and
+after our 1:2 greedy `match_2` is applied, and compare these to the
+results we found in `match_1` (the 1:1 match).
+
+``` r
+covs_for_rubin <- dm2200 %>%
+    select(linps)
+
+rubin_m2 <- bal.tab(M = match_2,
+                treat = dm2200$treat,
+                covs = covs_for_rubin, 
+                un = TRUE, disp.v.ratio = TRUE)[1]
+
+rubin_report_m12 <- tibble(
+    status = c("Rule1", "Rule2"),
+    Unmatched = c(rubin_m2$Balance$Diff.Un,
+                  rubin_m2$Balance$V.Ratio.Un),
+    Match1 = c(rubin_m1$Balance$Diff.Adj,
+               rubin_m1$Balance$V.Ratio.Adj),
+    Match2 = c(rubin_m2$Balance$Diff.Adj,
+               rubin_m2$Balance$V.Ratio.Adj))
+
+rubin_report_m12 %>% knitr::kable(digits = 2)
+```
+
+| status | Unmatched | Match1 | Match2 |
+| :----- | --------: | -----: | -----: |
+| Rule1  |      2.07 |   0.25 |   0.50 |
+| Rule2  |      0.75 |   1.86 |   2.44 |
+
+  - Again, we’d like to see Rule 1 as close to zero as possible, and
+    definitely below 0.5 in absolute value. Unsurprisingly, when we have
+    to match *two* exposure B subjects to each exposure A subject, we
+    don’t get matches that are as close.
+  - The Rule 2 results tell us about the variance ratio of the linear
+    propensity scores. We want this to be within (0.5, 2) and ideally
+    within (0.8, 1.25). Again, here the results are a bit disappointing
+    in comparison to what we saw in our 1:1 match.
+
+### Using `bal.plot` from `cobalt`
+
+Looking at the propensity scores in each group, perhaps in mirrored
+histograms, we have …
+
+``` r
+bal.plot(obj = match_2,
+         treat = dm2200$exposure,
+         covs = covs_2plus,
+         var.name = "ps", 
+         which = "both",
+         sample.names = 
+             c("Unmatched Sample", "match_2 Sample"),
+         type = "histogram", mirror = TRUE)
+```
+
+![](matching_with_dm2200_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
+
+### Using `love.plot` to look at Standardized Differences
+
+``` r
+love.plot(bal2, 
+          threshold = .1, size = 3,
+          var.order = "unadjusted",
+          stats = "mean.diffs",
+          stars = "raw",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Love Plot for our 1:2 Match") +
+    labs(caption = "* indicates raw mean differences (for binary variables)")
+```
+
+![](matching_with_dm2200_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
+
+### Using `love.plot` to look at Variance Ratios
+
+Again, the categorical variables are dropped.
+
+``` r
+love.plot(bal2, 
+          threshold = .5, size = 3,
+          stats = "variance.ratios",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Variance Ratios for our 1:2 Match") 
+```
+
+![](matching_with_dm2200_files/figure-gfm/unnamed-chunk-28-1.png)<!-- -->
+
+# `match_3` 1:3 greedy matching, with replacement
+
+Again, we’ll match on the linear propensity score, and define our
+`treat` (treatment) as occurring when `exposure` is A. But now, we’ll
+match *with* replacement (which means that multiple subject with
+exposure A can be matched to the same subject with exposure B) and we’ll
+also match each subject with exposure A to be matched to exactly three
+subjects with exposure B.
+
+``` r
+match_3 <- Match(Tr = dm2200$treat, X = dm2200$linps, 
+                 M = 3, replace = TRUE, ties = FALSE,
+                 estimand = "ATT")
+
+summary(match_3)
+```
+
+``` 
+
+Estimate...  0 
+SE.........  0 
+T-stat.....  NaN 
+p.val......  NA 
+
+Original number of observations..............  2200 
+Original number of treated obs...............  200 
+Matched number of observations...............  200 
+Matched number of observations  (unweighted).  600 
+```
+
+Note that we now have 600 matched exposure “B” subjects in our matched
+sample.
+
+## Obtaining the Matched Sample
+
+As before,
+
+``` r
+match3_matches <- factor(rep(match_3$index.treated, 2))
+dm2200_matched3 <- cbind(match3_matches, 
+                         dm2200[c(match_3$index.control, 
+                                  match_3$index.treated),])
+```
+
+If this was being done without replacement, this would repeat each
+exposure A subject three times, to match up with the 600 exposure B
+subjects. But here, we have a different result.
+
+How many unique subjects are in our matched sample?
+
+``` r
+dm2200_matched3 %$% n_distinct(subject)
+```
+
+    [1] 503
+
+How many of those are in Exposure A?
+
+``` r
+dm2200_matched3 %>% filter(exposure == "A") %$% n_distinct(subject)
+```
+
+    [1] 200
+
+How many of those are in Exposure B?
+
+``` r
+dm2200_matched3 %>% filter(exposure == "B") %$% n_distinct(subject)
+```
+
+    [1] 303
+
+Among those exposure A subjects, how many times were they used in the
+matches?
+
+``` r
+dm2200_matched3 %>% filter(exposure == "A") %>% 
+    count(subject) %>%
+    tabyl(n)
+```
+
+``` 
+ n n_n percent
+ 3 200       1
+```
+
+Among those exposure B subjects, how many times were they used in the
+matches?
+
+``` r
+dm2200_matched3 %>% filter(exposure == "B") %>% 
+    count(subject) %>%
+    tabyl(n)
+```
+
+``` 
+  n n_n    percent
+  1 196 0.64686469
+  2  63 0.20792079
+  3  20 0.06600660
+  4   5 0.01650165
+  5   5 0.01650165
+  6   2 0.00660066
+  7   1 0.00330033
+  8   1 0.00330033
+  9   2 0.00660066
+ 10   2 0.00660066
+ 13   2 0.00660066
+ 15   1 0.00330033
+ 20   1 0.00330033
+ 23   1 0.00330033
+ 24   1 0.00330033
+```
+
+## Checking Covariate Balance for our 1:2 Greedy Match
+
+### Using `bal.tab` to obtain a balance table
+
+``` r
+covs_3plus <- dm2200 %>%
+    select(age, race, hisp, sex, insur, nincome,
+           nhsgrad, cleve, a1c, ldl, visits, tobacco,
+           statin, ace_arb, betab, depr_dx, eyeex, pneumo,
+           ps, linps)
+
+bal3 <- bal.tab(M = match_3,
+                treat = dm2200$exposure,
+                covs = covs_3plus, quick = FALSE,
+                un = TRUE, disp.v.ratio = TRUE)
+bal3
+```
+
+    Balance Measures
+                        Type Diff.Un V.Ratio.Un Diff.Adj V.Ratio.Adj
+    age              Contin.  0.4076     1.3195  -0.0392      1.3579
+    race_Asian        Binary  0.0025             -0.0017            
+    race_Black_AA     Binary -0.2975              0.0267            
+    race_Other        Binary  0.0320             -0.0017            
+    race_White        Binary  0.2630             -0.0233            
+    hisp              Binary  0.0320             -0.0067            
+    sex_M             Binary -0.2190              0.0217            
+    insur_Commercial  Binary  0.2200             -0.0017            
+    insur_Medicaid    Binary -0.3745             -0.0500            
+    insur_Medicare    Binary  0.2715              0.0383            
+    insur_Uninsured   Binary -0.1170              0.0133            
+    nincome          Contin.  0.5306     3.2086   0.0414      1.3459
+    nhsgrad          Contin.  0.3958     0.9727   0.0101      0.8290
+    cleve             Binary -0.3505              0.0017            
+    a1c              Contin. -0.0419     0.8190  -0.0490      1.0185
+    ldl              Contin.  0.0783     0.9012   0.1093      1.0521
+    visits           Contin. -0.6304     0.4602  -0.0703      0.8287
+    tobacco_Current   Binary -0.3175             -0.0050            
+    tobacco_Former    Binary  0.1575              0.0367            
+    tobacco_Never     Binary  0.1600             -0.0317            
+    statin            Binary  0.0315             -0.0150            
+    ace_arb           Binary -0.0345             -0.0033            
+    betab             Binary  0.1255             -0.0100            
+    depr_dx           Binary  0.1115              0.0083            
+    eyeex             Binary  0.0925              0.0017            
+    pneumo            Binary  0.3030             -0.0017            
+    ps               Contin. -2.9189     0.1576  -0.0389      0.9513
+    linps            Contin. -1.7842     1.3395  -0.0268      0.8894
+    
+    Sample sizes
+                           A        B
+    All                  200 2000.000
+    Matched (ESS)        200  104.408
+    Matched (Unweighted) 200  303.000
+    Unmatched              0 1697.000
+
+### Checking Rubin’s Rules 1 and 2
+
+We’ll build a little table of the Rubin’s Rules (1 and 2) before and
+after our 1:2 greedy `match_2` is applied, and compare these to the
+results we found in `match_1` (the 1:1 match).
+
+``` r
+covs_for_rubin <- dm2200 %>%
+    select(linps)
+
+rubin_m3 <- bal.tab(M = match_3,
+                treat = dm2200$treat,
+                covs = covs_for_rubin, 
+                un = TRUE, disp.v.ratio = TRUE)[1]
+
+rubin_report_m123 <- tibble(
+    status = c("Rule1", "Rule2"),
+    Unmatched = c(rubin_m2$Balance$Diff.Un,
+                  rubin_m2$Balance$V.Ratio.Un),
+    Match1 = c(rubin_m1$Balance$Diff.Adj,
+               rubin_m1$Balance$V.Ratio.Adj),
+    Match2 = c(rubin_m2$Balance$Diff.Adj,
+               rubin_m2$Balance$V.Ratio.Adj),
+    Match3 = c(rubin_m3$Balance$Diff.Adj,
+               rubin_m3$Balance$V.Ratio.Adj))
+
+
+rubin_report_m123 %>% knitr::kable(digits = 2)
+```
+
+| status | Unmatched | Match1 | Match2 | Match3 |
+| :----- | --------: | -----: | -----: | -----: |
+| Rule1  |      2.07 |   0.25 |   0.50 |   0.03 |
+| Rule2  |      0.75 |   1.86 |   2.44 |   1.12 |
+
+  - Again, we’d like to see Rule 1 results as close to zero as possible,
+    and definitely below 0.5 in absolute value.
+  - In Rule 2, we want the variance ratio of the linear propensity
+    scores to be within (0.5, 2) and ideally within (0.8, 1.25).
+  - It appears that (in these data) allowing the same exposure B subject
+    to be used for multiple matches (matching with replacement) more
+    than makes up for the fact that matching 3 exposure B’s for each
+    exposure A (1:3 matching) is a tougher job than pair (1:1) matching,
+    as seen in the results for Rubin’s Rule 1 and Rule 2.
+
+### Using `bal.plot` from `cobalt`
+
+Looking at the propensity scores in each group, perhaps in mirrored
+histograms, we have …
+
+``` r
+bal.plot(obj = match_3,
+         treat = dm2200$exposure,
+         covs = covs_3plus,
+         var.name = "ps", 
+         which = "both",
+         sample.names = 
+             c("Unmatched Sample", "match_3 Sample"),
+         type = "histogram", mirror = TRUE)
+```
+
+![](matching_with_dm2200_files/figure-gfm/unnamed-chunk-38-1.png)<!-- -->
+
+### Using `love.plot` to look at Standardized Differences
+
+``` r
+love.plot(bal3, 
+          threshold = .1, size = 3,
+          var.order = "unadjusted",
+          stats = "mean.diffs",
+          stars = "raw",
+          abs = TRUE,
+          sample.names = c("Unmatched", "Matched"),
+          title = "Love Plot of |Mean Differences| for our 1:3 Match") +
+    labs(caption = "* indicates raw mean differences (for binary variables)")
+```
+
+![](matching_with_dm2200_files/figure-gfm/unnamed-chunk-39-1.png)<!-- -->
+
+### Using `love.plot` to look at Variance Ratios
+
+Again, the categorical variables are dropped.
+
+``` r
+love.plot(bal3, 
+          threshold = .5, size = 3,
+          stats = "variance.ratios",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Variance Ratios for our 1:3 Match") 
+```
+
+![](matching_with_dm2200_files/figure-gfm/unnamed-chunk-40-1.png)<!-- -->
+
 # Outcome Models
 
 We’ll fit two (overly simplistic) outcome models, one for `bp_good` (our
@@ -616,7 +1141,7 @@ tidy(result_match1_bp, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95) 
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| exposure == “A”TRUE |     0.61 |     0.211 |    0.403 |     0.924 |
+| exposure == “A”TRUE |    0.561 |     0.221 |    0.364 |     0.866 |
 
 ### Quantitative Outcome: `bmi`
 
@@ -652,10 +1177,132 @@ tidy(result_match1_bmi,
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| (Intercept)         |   35.016 |     0.597 |   33.846 |    36.186 |
-| exposure == “A”TRUE |  \-2.189 |     0.844 |  \-3.844 |   \-0.534 |
+| (Intercept)         |   35.201 |     0.638 |   33.950 |    36.451 |
+| exposure == “A”TRUE |  \-2.374 |     0.902 |  \-4.142 |   \-0.605 |
 
-## Key References
+## Adjusted Outcome Models after `match2`
+
+### Binary Outcome: `bp_good`
+
+``` r
+result_match2_bp <- clogit(bp_good ~ (exposure == "A") + 
+                          strata(match2_matches),
+                      data = dm2200_matched2)
+
+tidy(result_match2_bp, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95) %>%
+    select(term, estimate, std.error, conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+| term                | estimate | std.error | conf.low | conf.high |
+| :------------------ | -------: | --------: | -------: | --------: |
+| exposure == “A”TRUE |    0.474 |     0.177 |    0.335 |     0.671 |
+
+### Quantitative Outcome: `bmi`
+
+We’ll use a mixed model to account for our 1:1 matching. The matches
+here are treated as a random factor, with the exposure a fixed factor,
+in the `lme4` package.
+
+``` r
+dm2200_matched2 <- dm2200_matched2 %>% 
+    mutate(match2_matches_f = as.factor(match2_matches))
+
+result_match2_bmi <- lmer(bmi ~ (exposure == "A") + 
+                              (1 | match2_matches_f), 
+                          data = dm2200_matched2)
+
+tidy(result_match2_bmi, 
+     conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(group == "fixed") %>%
+    select(term, estimate, std.error, 
+           conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+    Warning in bind_rows_(x, .id): binding factor and character vector, coercing
+    into character vector
+
+    Warning in bind_rows_(x, .id): binding character and factor vector, coercing
+    into character vector
+
+| term                | estimate | std.error | conf.low | conf.high |
+| :------------------ | -------: | --------: | -------: | --------: |
+| (Intercept)         |   34.670 |     0.457 |   33.774 |    35.566 |
+| exposure == “A”TRUE |  \-1.843 |     0.561 |  \-2.943 |   \-0.743 |
+
+## Adjusted Outcome Models after `match3`
+
+### Binary Outcome: `bp_good`
+
+``` r
+result_match3_bp <- clogit(bp_good ~ (exposure == "A") + 
+                          strata(match3_matches),
+                      data = dm2200_matched3)
+
+tidy(result_match3_bp, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95) %>%
+    select(term, estimate, std.error, conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+| term                | estimate | std.error | conf.low | conf.high |
+| :------------------ | -------: | --------: | -------: | --------: |
+| exposure == “A”TRUE |    0.615 |     0.137 |    0.471 |     0.805 |
+
+### Quantitative Outcome: `bmi`
+
+We’ll use a mixed model to account for our 1:1 matching. The matches
+here are treated as a random factor, with the exposure a fixed factor,
+in the `lme4` package.
+
+``` r
+dm2200_matched3 <- dm2200_matched3 %>% 
+    mutate(match3_matches_f = as.factor(match3_matches))
+
+result_match3_bmi <- lmer(bmi ~ (exposure == "A") + 
+                              (1 | match3_matches_f), 
+                          data = dm2200_matched3)
+
+tidy(result_match3_bmi, 
+     conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(group == "fixed") %>%
+    select(term, estimate, std.error, 
+           conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+    Warning in bind_rows_(x, .id): binding factor and character vector, coercing
+    into character vector
+
+    Warning in bind_rows_(x, .id): binding character and factor vector, coercing
+    into character vector
+
+| term                | estimate | std.error | conf.low | conf.high |
+| :------------------ | -------: | --------: | -------: | --------: |
+| (Intercept)         |   34.444 |     0.415 |   33.630 |    35.259 |
+| exposure == “A”TRUE |  \-1.617 |     0.453 |  \-2.505 |   \-0.730 |
+
+# Cleanup
+
+We’ve created a lot of variables here that we don’t actually need going
+forward. So I’ll remove them here:
+
+``` r
+rm(bal1, bal2, bal3, 
+   covs_1, covs_1plus, covs_2plus, covs_3plus, 
+   covs_for_rubin, dm2200, 
+   dm2200_matched1, dm2200_matched2, dm2200_matched3,
+   match_1, match_2, match_3, 
+   prop_model, 
+   result_match1_bmi, result_match2_bmi, result_match3_bmi,
+   result_match1_bp, result_match2_bp, result_match3_bp,
+   rubin_m1, rubin_m2, rubin_m3,
+   rubin_report_m1, rubin_report_m12, rubin_report_m123,
+   t1, unadj_mod1, unadj_mod2,
+   match1_matches, match2_matches, match3_matches)
+```
+
+# Key References
 
 Matching was performed using the Matching package (Sekhon, 2011), and
 covariate balance was assessed using cobalt (Greifer, 2020), both in R
@@ -663,3 +1310,10 @@ covariate balance was assessed using cobalt (Greifer, 2020), both in R
 
   - Greifer, N. (2020). cobalt: Covariate Balance Tables and Plots. R
     package version 4.0.0.
+  - Sekhon, J.S. (2011) Multivariate and Propensity Score Matching
+    Software with Automated Balance Optimization: The Matching Package
+    for R, *J of Statistical Software*, 2011, 42: 7,
+    <http://www.jstatsoft.org/>. R package version 4.9-6.
+  - R Core Team (2019). R: A language and environment for statistical
+    computing. R Foundation for Statistical Computing, Vienna, Austria.
+    URL <https://www.R-project.org/>.
