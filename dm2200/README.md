@@ -14,4 +14,6 @@ The purpose of this (simulated) example is to demonstrate a range of propensity 
     1. 1:1 matching without replacement
     2. 1:2 matching without replacement
     3. 1:3 matching with replacement
+    4. 1:1 matching without replacement but with a caliper on the propensity score
+
 
