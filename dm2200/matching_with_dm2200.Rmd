@@ -11,7 +11,7 @@ output:
 knitr::opts_chunk$set(comment = NA)
 ```
 
-This document will eventually demonstrate multiple matching strategies incorporating the propensity score, including the assessment of covariate balance before and after matching. We focus on binary and quantitative outcomes in a (simulated) electronic health records data setting. It uses the `cobalt` package extensively. See the Key References section at the end of the document.
+This document demonstrates multiple matching strategies incorporating the propensity score, including the assessment of covariate balance before and after matching. We focus on binary and quantitative outcomes in a (simulated) electronic health records data setting. It uses the `cobalt` package extensively. See the Key References section at the end of the document.
 
 ## Setup
 
@@ -140,7 +140,7 @@ ggplot(dm2200, aes(x = exposure, y = linps)) +
     geom_boxplot(width = 0.3)
 ```
 
-# `match_1` 1:1 greedy matching without replacement
+# `match_1` 1:1 greedy matching without replacement with the `Matching` package
 
 We're going to match on the linear propensity score, and define our `treat` (treatment) as occurring when `exposure` is A.
 
@@ -297,7 +297,7 @@ love.plot(bal1,
           title = "Variance Ratios for our 1:1 Match") 
 ```
 
-# `match_2` 1:2 greedy matching without replacement
+# `match_2` 1:2 greedy matching without replacement with the `Matching` package
 
 Again, we'll match on the linear propensity score, and define our `treat` (treatment) as occurring when `exposure` is A. The only difference will be that we'll allow each subject with exposure A to be matched to exactly two subjects with exposure B.
 
@@ -424,7 +424,7 @@ love.plot(bal2,
           title = "Variance Ratios for our 1:2 Match") 
 ```
 
-# `match_3` 1:3 greedy matching, with replacement
+# `match_3` 1:3 matching, with replacement with the `Matching` package
 
 Again, we'll match on the linear propensity score, and define our `treat` (treatment) as occurring when `exposure` is A. But now, we'll match *with* replacement (which means that multiple subject with exposure A can be matched to the same subject with exposure B) and we'll also match each subject with exposure A to be matched to exactly three subjects with exposure B.
 
@@ -485,7 +485,7 @@ dm2200_matched3 %>% filter(exposure == "B") %>%
     tabyl(n)
 ```
 
-## Checking Covariate Balance for our 1:2 Greedy Match
+## Checking Covariate Balance for our 1:3 Match
 
 ### Using `bal.tab` to obtain a balance table
 
@@ -575,6 +575,141 @@ love.plot(bal3,
           sample.names = c("Unmatched", "Matched"),
           title = "Variance Ratios for our 1:3 Match") 
 ```
+
+# `match_4` Caliper Matching (1:1 without replacement) with the `Matching` package
+
+The `Match` function in the `Matching` package allows you to specify a caliper. From the `Matching` help file:
+
+- A caliper is the maximum acceptable distance (on a covariate) which we are willing to accept in any match. Observations for which we cannot find a match within the caliper are dropped.Dropping observations generally changes the quantity being estimated.
+- The caliper is interpreted to be in standardized units. For example, caliper=.25 means that all matches not equal to or within .25 standard deviations of each covariate in X are dropped, and not matched.
+    - If a scalar caliper is provided to the `caliper` setting in the `Match` function, this caliper is used for all covariates in X. 
+    - If a vector of calipers is provided, a caliper value should be provided for each covariate in X.
+
+We'll again perform a 1:1 match without replacement, but now we'll do so while only accepting matches where the linear propensity score of each match is within 0.2 standard deviations of the linear PS. 
+
+```{r}
+match_4 <- Match(Tr = dm2200$treat, X = dm2200$linps, 
+                 M = 1, replace = FALSE, ties = FALSE,
+                 caliper = 0.2, estimand = "ATT")
+
+summary(match_4)
+```
+
+Note that we have now dropped 38 of the exposure "A" subjects, and reduced our sample to the 168 remaining exposure "A" subjects, who are paired with 162 unique matched exposure "B" subjects in our matched sample.
+
+## Obtaining the Matched Sample
+
+As before,
+
+```{r}
+match4_matches <- factor(rep(match_4$index.treated, 2))
+dm2200_matched4 <- cbind(match4_matches, 
+                         dm2200[c(match_4$index.control, 
+                                  match_4$index.treated),])
+```
+
+How many unique subjects are in our matched sample?
+
+```{r}
+dm2200_matched4 %$% n_distinct(subject)
+```
+
+This match includes 162 pairs so 324 subjects, since we've done matching without replacement.
+
+```{r}
+dm2200_matched4 %>% count(exposure)
+```
+
+## Checking Covariate Balance for our 1:1 Caliper Match
+
+### Using `bal.tab` to obtain a balance table
+
+```{r}
+covs_4plus <- dm2200 %>%
+    select(age, race, hisp, sex, insur, nincome,
+           nhsgrad, cleve, a1c, ldl, visits, tobacco,
+           statin, ace_arb, betab, depr_dx, eyeex, pneumo,
+           ps, linps)
+
+bal4 <- bal.tab(M = match_4,
+                treat = dm2200$exposure,
+                covs = covs_4plus, quick = FALSE,
+                un = TRUE, disp.v.ratio = TRUE)
+bal4
+```
+
+### Checking Rubin's Rules 1 and 2
+
+We'll build a little table of the Rubin's Rules (1 and 2) before and after our 1:2 greedy `match_4` is applied, and compare these to the results we found in `match_1` (the 1:1 match).
+
+```{r}
+covs_for_rubin <- dm2200 %>%
+    select(linps)
+
+rubin_m4 <- bal.tab(M = match_4,
+                treat = dm2200$treat,
+                covs = covs_for_rubin, 
+                un = TRUE, disp.v.ratio = TRUE)[1]
+
+rubin_report_m1234 <- tibble(
+    status = c("Rule1", "Rule2"),
+    Unmatched = c(rubin_m2$Balance$Diff.Un,
+                  rubin_m2$Balance$V.Ratio.Un),
+    Match1 = c(rubin_m1$Balance$Diff.Adj,
+               rubin_m1$Balance$V.Ratio.Adj),
+    Match2 = c(rubin_m2$Balance$Diff.Adj,
+               rubin_m2$Balance$V.Ratio.Adj),
+    Match3 = c(rubin_m3$Balance$Diff.Adj,
+               rubin_m3$Balance$V.Ratio.Adj),
+    Match4 = c(rubin_m4$Balance$Diff.Adj,
+               rubin_m4$Balance$V.Ratio.Adj))
+
+rubin_report_m1234 %>% knitr::kable(digits = 2)
+```
+
+- This approach produces an exceptionally strong match in terms of balance, with Rubin's Rule 1 being very close to 0, and Rule 2 being very close to 1.
+- Unfortunately, we've only done this by dropping the 38 "hardest to match" subjects receiving exposure "A".
+
+### Using `bal.plot` from `cobalt`
+
+Looking at the propensity scores in each group, perhaps in mirrored histograms, we have ...
+
+```{r}
+bal.plot(obj = match_4,
+         treat = dm2200$exposure,
+         covs = covs_4plus,
+         var.name = "ps", 
+         which = "both",
+         sample.names = 
+             c("Unmatched Sample", "match_4 Sample"),
+         type = "histogram", mirror = TRUE)
+```
+
+### Using `love.plot` to look at Standardized Differences
+
+```{r}
+love.plot(bal4, 
+          threshold = .1, size = 3,
+          var.order = "unadjusted",
+          stats = "mean.diffs",
+          stars = "raw",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Love Plot for our 1:1 Caliper Match") +
+    labs(caption = "* indicates raw mean differences (for binary variables)")
+```
+
+### Using `love.plot` to look at Variance Ratios
+
+Again, the categorical variables are dropped.
+
+```{r}
+love.plot(bal4, 
+          threshold = .5, size = 3,
+          stats = "variance.ratios",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Variance Ratios for our 1:1 Caliper Match") 
+```
+
 
 # Outcome Models
 
@@ -708,22 +843,59 @@ tidy(result_match3_bmi,
     knitr::kable(digits = 3)
 ```
 
+## Adjusted Outcome Models after `match4`
+
+### Binary Outcome: `bp_good`
+
+```{r}
+result_match4_bp <- clogit(bp_good ~ (exposure == "A") + 
+                          strata(match4_matches),
+                      data = dm2200_matched4)
+
+tidy(result_match4_bp, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95) %>%
+    select(term, estimate, std.error, conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+### Quantitative Outcome: `bmi`
+
+We'll use a mixed model to account for our 1:1 matching. The matches here are treated as a random factor, with the exposure a fixed factor, in the `lme4` package.
+
+```{r}
+dm2200_matched4 <- dm2200_matched4 %>% 
+    mutate(match4_matches_f = as.factor(match4_matches))
+
+result_match4_bmi <- lmer(bmi ~ (exposure == "A") + 
+                              (1 | match4_matches_f), 
+                          data = dm2200_matched4)
+
+tidy(result_match4_bmi, 
+     conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(group == "fixed") %>%
+    select(term, estimate, std.error, 
+           conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
 
 # Cleanup
 
 We've created a lot of variables here that we don't actually need going forward. So I'll remove them here:
 
 ```{r}
-rm(bal1, bal2, bal3, 
-   covs_1, covs_1plus, covs_2plus, covs_3plus, 
+rm(bal1, bal2, bal3, bal4,
+   covs_1, covs_1plus, covs_2plus, covs_3plus, covs_4plus,
    covs_for_rubin, dm2200, 
    dm2200_matched1, dm2200_matched2, dm2200_matched3,
-   match_1, match_2, match_3, 
+   dm2200_matched4,
+   match_1, match_2, match_3, match_4,
    prop_model, 
    result_match1_bmi, result_match2_bmi, result_match3_bmi,
+   result_match4_bmi,
    result_match1_bp, result_match2_bp, result_match3_bp,
+   result_match4_bp,
    rubin_m1, rubin_m2, rubin_m3,
    rubin_report_m1, rubin_report_m12, rubin_report_m123,
+   rubin_report_m1234,
    t1, unadj_mod1, unadj_mod2,
    match1_matches, match2_matches, match3_matches)
 ```
