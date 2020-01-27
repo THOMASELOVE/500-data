@@ -4,8 +4,8 @@ The `lindner` data come from an observational study of 996 patients receiving an
 
 **Harry Persaud** was good enough to build a 12-task analysis of the data in `lindner`, using methods similar to those in the `toy2020` example, for quantitative and binary outcomes. We hope you find this helpful.
 
-- The latest PDF version is here.
-- The latest Github Markdown version (with code and results) is here.
-- The latest R Markdown version (code only) is here.
+- The latest [PDF version is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner.pdf).
+- The latest [Github Markdown version (with code and results) is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner.md).
+- The latest [R Markdown version (code only) is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner.Rmd).
 
-This is a relatively early draft version. We'd very much like your help with improving it. Suggestions should be sent to **500-help at case dot edu**.
+This is a relatively early draft. We'd very much like your help with improving it. Suggestions should be sent to **500-help at case dot edu**.
