@@ -1,0 +1,1314 @@
+---
+title: "The Lindner Example"
+author: "Harry A. Persaud"
+date: 'Version: `r Sys.Date()`'
+output:
+    github_document:
+        toc: yes
+    pdf_document:
+        toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+# Load packages
+library(broom)
+library(patchwork)
+library(cobalt)
+library(Matching)
+library(tableone)
+library(twang)
+library(janitor)
+library(here)
+library(magrittr)
+library(lme4)
+library(tidyverse)
+```
+
+# Loading data
+
+Information on the lindner dataset can be found [here](https://www.rdocumentation.org/packages/MatchLinReg/versions/0.7.0/topics/lindner) ^1,2^
+
+^1^ Rdocumentation. (n.d.). lindner: Lindner Center Data On 996 PCI Patients Analyzed By Kereiakes Et Al. (2000). Retrieved from https://www.rdocumentation.org/packages/MatchLinReg/versions/0.7.0/topics/lindner
+
+
+^2^ Kereiakes DJ, Obenchain RL, Barber BL, et al. Abciximab provides cost effective survival advantage in high volume interventional practice. Am Heart J 2000; 140: 603-610.
+
+```{r}
+#Read in data using 'here' package
+lindner_raw <- read.csv(here("data", "lindner.csv")) %>% 
+  tbl_df()
+
+#print first 10 rows of data frame
+lindner_raw
+```
+
+- The dataset contains information on 996 participants.
+
+```{r}
+# see how much missing data is in dataset (none)
+colSums(is.na(lindner_raw))
+```
+
+- There is no missing data.
+
+# Data managment
+
+## Managing binary variables
+
+We'll want both a numeric and factored version of each binary variable. 
+
+- In all numeric versions of binary variables: 1 indicates 'yes' to having trait/characteristic, 0 indicates 'no' to having trait/characteristic.
+
+- variable names with trailing "_f" denotes the factored version of each binary variable.
+
+```{r}
+# Six month survival (turning logical variable to a factor)
+lindner_raw$sixMonthSurvive_f <- factor(lindner_raw$sixMonthSurvive, levels = c(TRUE,FALSE),
+labels = c("yes", "no"))
+
+# Creating numeric (1/0) version of six month survival variable
+lindner_raw$sixMonthSurvive <- factor(lindner_raw$sixMonthSurvive_f, levels = c("yes","no"),
+labels = c(1, 0))
+
+lindner_raw$sixMonthSurvive <- ifelse(lindner_raw$sixMonthSurvive == "1", 1, 0)
+
+#Add variable named treated (same values as abcix variable)
+lindner_raw$treated <- lindner_raw$abcix
+
+# Factoring the exposure of interest variable. Change the name to 'treated' too.
+lindner_raw$treated_f <- factor(lindner_raw$abcix, levels = c(1,0),
+labels = c("treated", "control"))
+
+# Factor version of stent variable
+lindner_raw$stent_f <- factor(lindner_raw$stent, levels = c(1,0),
+labels = c("yes", "no"))
+
+# Factoring the female variable
+lindner_raw$female_f <- factor(lindner_raw$female, levels = c(1,0),
+labels = c("female", "male"))
+
+# Factoring the diabetic variable
+lindner_raw$diabetic_f <- factor(lindner_raw$diabetic, levels = c(1,0),
+labels = c("yes", "no"))
+
+# Factoring the acutemi variable
+lindner_raw$acutemi_f <- factor(lindner_raw$acutemi, levels = c(1,0),
+labels = c("yes", "no"))
+
+#make lindner dataset with "clean" name. 
+lindner_clean <- lindner_raw
+```
+
+## Inspecting the clean data
+
+```{r}
+mosaic::inspect(lindner_clean)
+```
+
+
+# Codebook
+
+Information was copy/pasted from [here](https://www.rdocumentation.org/packages/MatchLinReg/versions/0.7.0/topics/lindner) ^1,2^ (with some changes to reflect this analysis)
+
+- `cardbill` (**Quantitative OUTCOME**): "Cardiac related costs incurred within 6 months of patient's initial PCI; numeric value in 1998 dollars; costs were truncated by death for the 26 patients with lifepres == 0."
+
+- `sixMonthSurvive`/`sixMonthSurvive_f` (**BINARY OUTCOME**): "Survival at six months a recoded version of lifepres."
+
+- `treated`/`treated_f` (**EXPOSURE**): "Numeric treatment selection indicator; 0 implies usual PCI care alone; 1 implies usual PCI care deliberately augmented by either planned or rescue treatment with abciximab."
+
+- `stent`/`stent_f`: "Coronary stent deployment; numeric, with 1 meaning YES and 0 meaning NO."
+
+- `height`: "Height in centimeters; numeric integer from 108 to 196."
+
+- `female`/`female_f`: "Female gender; numeric, with 1 meaning YES and 0 meaning NO."
+
+- `diabetic`/`diabetic_f`: "Diabetes mellitus diagnosis; numeric, with 1 meaning YES and 0 meaning NO."
+
+- `acutemi`/`acutemi_f`: "Acute myocardial infarction within the previous 7 days; numeric, with 1 meaning YES and 0 meaning NO."
+
+- `ejecfrac`: "Left ejection fraction; numeric value from 0 percent to 90 percent."
+
+- `ves1proc`: "Number of vessels involved in the patient's initial PCI procedure; numeric integer from 0 to 5."
+
+* Note: Percutaneous Coronary Intervention (PCI)
+
+^1^ Rdocumentation. (n.d.). lindner: Lindner Center Data On 996 PCI Patients Analyzed By Kereiakes Et Al. (2000). Retrieved from https://www.rdocumentation.org/packages/MatchLinReg/versions/0.7.0/topics/lindner
+
+
+^2^ Kereiakes DJ, Obenchain RL, Barber BL, et al. Abciximab provides cost effective survival advantage in high volume interventional practice. Am Heart J 2000; 140: 603-610.
+
+# Table 1
+
+```{r}
+#List of variable namees 
+var_list = c("cardbill", "sixMonthSurvive_f", "stent_f", "height", "female_f", "diabetic_f", "acutemi_f", "ejecfrac", "ves1proc")
+
+#list factor variables
+factor_list = c("sixMonthSurvive_f", "stent_f", "female_f", "diabetic_f", "acutemi_f")
+
+CreateTableOne(vars = var_list, strata = "treated_f",
+data = lindner_clean, factorVars = factor_list)
+```
+
+The mean `cardbill` was higher in the treated population. A larger percentage of controls did not survive through 6 months.
+
+# Task 1: Ignoring covariates, estimate the effect of treatment vs. control on the two outcomes
+
+## Quantitative outcome: `cardbill`
+
+```{r}
+#summary stats on quantitative outcome
+lindner_clean %$%
+  mosaic::favstats(cardbill ~ treated_f)
+```
+
+- Across the entire sample, the mean (\$16,127 vs. \$14,614) and median (\$12,944 vs. \$10,423) cardiac care costs were higher in treated individuals than non-treated participants. 
+```{r}
+#Histogram using ggplot
+ggplot(lindner_clean, aes(x = cardbill, fill = "cardbill")) +
+  geom_histogram() +
+  theme_bw() +
+  labs(y = "Count",
+       x = "Cardiac care costs ($)",
+       title = "Cardbill appears to be right skewed") +
+  guides(fill = FALSE)
+```
+
+`cardbill` appears to be right/positively skewed.
+
+```{r}
+#Build model
+unadjust_quant_outcome <- lm(cardbill ~ treated, data = lindner_clean)
+
+# Store model information in tidied dataframe
+unadjust_quant_outcome_tidy <- tidy(unadjust_quant_outcome, conf.int = TRUE, conf.level = 0.95) %>%
+    filter(term == "treated")
+
+unadjust_quant_outcome_tidy
+```
+
+Treated individuals were estimated to spend `r round(unadjust_quant_outcome_tidy$estimate,2)` (95%CI `r round(unadjust_quant_outcome_tidy$conf.low,2)`, `r round(unadjust_quant_outcome_tidy$conf.high,2)`) more dollars than non-treated individuals. 
+
+## Binary outcome: `sixMonthSurvive`
+
+```{r}
+#contingency table using EPI package
+Epi::twoby2(table(lindner_clean$treated_f, lindner_clean$sixMonthSurvive_f))
+```
+
+The odds treated individuals were alive after 6 months was roughly 3.31 times the odds that non-treated individuals were alive after 6 months.
+
+```{r}
+#Logistic regression modeel
+unadjust_binary_outcome <- glm(sixMonthSurvive ~ treated, data = lindner_clean, family = binomial())
+
+# Store model information in tidied dataframe
+unadjust_binary_outcome_tidy <- tidy(unadjust_binary_outcome, conf.int = TRUE, conf.level = 0.95, exponentiate = TRUE) %>%
+    filter(term == "treated")
+
+unadjust_binary_outcome_tidy
+```
+
+
+
+The predicted odds of being alive after six months in treated individuals was  `r round(unadjust_binary_outcome_tidy$estimate,2)` times higher than the odds that a  non-treated individual would be alive after six months (95%CI `r round(unadjust_binary_outcome_tidy$conf.low,2)`, `r round(unadjust_binary_outcome_tidy$conf.high,2)`).
+
+# Task 2: Fitting the propensity score model
+
+Predict treatment status based on available covariates. We're not worried about overfitting (including too many covariates) when calculating the propensity scores.
+
+```{r}
+#Use logistic regression to predict log odds of being treated based on available covariates. 
+psmodel <- glm(treated ~ stent + height + female + diabetic + acutemi + ejecfrac + ves1proc, family = binomial(), data =lindner_clean)
+
+summary(psmodel)
+```
+
+Store the raw and linear propensity scores below.
+
+```{r}
+lindner_clean$ps <- psmodel$fitted
+lindner_clean$linps <- psmodel$linear.predictors
+```
+
+## Comparing distribution of propensity scores across treatment groups
+
+## Numerically
+
+```{r}
+lindner_clean %$% 
+  mosaic::favstats(ps ~ treated_f)
+```
+
+Above we can see there are no propensity scores equal to, or very close to, 0 or 1. 
+
+## Visually
+
+### Boxplot 
+
+Now we'll visualize the distribution of the propensity scores stratified by treatment status.  
+
+```{r}
+ggplot(lindner_clean, aes(x = treated_f, y = ps, color = treated_f)) +
+geom_boxplot() +
+geom_jitter(width = 0.1) +
+guides(color = FALSE) +
+theme_bw() +
+labs(x = "",
+     title = "Raw propensity scores, stratified by exposure group")
+```
+
+### Density plot
+
+```{r}
+ggplot(lindner_clean, aes(x = linps, fill = treated_f)) +
+geom_density(alpha = 0.3) +
+  theme_bw()
+```
+
+Both plots demonstrate good overlap, suggesting a propensity score analysis may be appropriate.
+
+# Task 3: Rubin's Rules For Assessing Overlap Before Propensity Adjustment
+
+##  Rubin's Rule 1
+
+```{r}
+rubin1.unadj <- with(lindner_clean,
+abs(100*(mean(linps[treated==1])-mean(linps[treated==0]))/sd(linps)))
+rubin1.unadj
+```
+
+Fail Rubin's Rule 1 (want a value below 50%).
+
+## Rubin's Rule 2
+
+```{r}
+rubin2.unadj <-with(lindner_clean, var(linps[treated==1])/var(linps[treated==0]))
+rubin2.unadj
+```
+
+Fail Rubin's Rule 2 (looking for value between 0.8 - 1.2 [ideally, 1])
+
+
+# Task 4: Greedy 1:1 matching on the linear PS
+
+- Without replacement
+
+- Match 1 treated patient to 1 control patient (so we'll have "left over" treated patients not included in the sample)
+
+```{r}
+X <- lindner_clean$linps ## matching on the linear propensity score
+Tr <- as.logical(lindner_clean$treated)
+match1 <- Match(Tr=Tr, X=X, M = 1, replace=FALSE, ties=FALSE)
+summary(match1)
+```
+
+Matched 298 treated individuals with 298 control participants.
+
+- Note: all controls are used in this sample. However, only 298/698 treated individuals were used. 
+
+Below we'll assess the match balance from the 1:1 matching.
+
+```{r}
+set.seed(2020)
+mb1 <- MatchBalance(treated ~ stent + height + female + diabetic + acutemi + ejecfrac + ves1proc + ps + linps, data=lindner_clean,
+match.out = match1, nboots=500)
+```
+
+Name variables in matchbalance output.
+
+```{r}
+covnames <- c("stent", "height", "female", "diabetic", "acutemi", "ejecfrac", "ves1proc", "ps", "linps")
+```
+
+Dr. Love's code to extract the standardized differences.
+
+```{r}
+pre.szd <- NULL; post.szd <- NULL
+for(i in 1:length(covnames)) {
+pre.szd[i] <- mb1$BeforeMatching[[i]]$sdiff.pooled
+post.szd[i] <- mb1$AfterMatching[[i]]$sdiff.pooled
+}
+```
+
+Table standardized differences
+
+```{r}
+match_szd <- data.frame(covnames, pre.szd, post.szd, row.names=covnames)
+print(match_szd, digits=3)
+```
+
+## Love Plot of standardized differences before and after 1:1 matching
+
+## Using ggplot
+
+Blue points are post-adjustment; white are pre-adjustment.
+
+```{r}
+lp_wo_rep <- ggplot(match_szd, aes(x = pre.szd, y = reorder(covnames, pre.szd))) +
+geom_point(col = "black", size = 3, pch = 1) +
+geom_point(aes(x = post.szd, y = reorder(covnames, pre.szd)),
+size = 3, col = "blue") +
+theme_bw() +
+geom_vline(aes(xintercept = 0)) +
+geom_vline(aes(xintercept = 10), linetype = "dashed", col = "red") +
+geom_vline(aes(xintercept = -10), linetype = "dashed", col = "red") +
+labs(x = "Standardized Difference (%)", 
+     y = "",
+     title = "Love Plot",
+     subtitle = "1:1 matching without replacement")
+
+lp_wo_rep
+```
+
+- Visually, this 1:1 greedy matching doesn't appear to be adequate. 
+
+## Using `cobalt` to make the Love Plot
+
+Here's a somewhat automated way to create the Love Plot.
+
+```{r}
+cobalt_tab <- bal.tab(match1, treated ~ stent + height + female + diabetic + acutemi + ejecfrac + ves1proc + ps + linps, data=lindner_clean, un = TRUE)
+
+cobalt_tab
+```
+
+```{r}
+p <- love.plot(cobalt_tab, threshold = .1, size = 1.5,
+var.order = "unadjusted",
+title = "Standardized Differences after 1:1 Matching without replacement",
+stars = "std")
+
+p + theme_bw()
+```
+
+## Extracting Variance Ratios
+
+```{r}
+pre.vratio <- NULL; post.vratio <- NULL
+for(i in 1:length(covnames)) {
+pre.vratio[i] <- mb1$BeforeMatching[[i]]$var.ratio
+post.vratio[i] <- mb1$AfterMatching[[i]]$var.ratio
+}
+## Table of Variance Ratios
+match_vrat <- data.frame(names = covnames, pre.vratio, post.vratio, row.names=covnames)
+print(match_vrat, digits=2)
+```
+
+## Creating a dataframe containing the matched sample
+
+```{r}
+matches <- factor(rep(match1$index.treated, 2))
+lindner_clean.matchedsample <- cbind(matches, lindner_clean[c(match1$index.control, match1$index.treated),])
+
+# Check to see if sample makes sense
+lindner_clean.matchedsample %>% count(treated_f)
+```
+
+## Reassessing Rubin's Rules after 1:1 matching without replacement
+
+### Rubin's Rule 1
+
+```{r}
+rubin1.match <- with(lindner_clean.matchedsample,
+abs(100*(mean(linps[treated==1])-mean(linps[treated==0]))/sd(linps)))
+rubin1.match
+```
+
+The new value for Rubin's Rule 1 is `r round(rubin1.match,2)`. While not ideal this technically passes Rubin's Rule 1 and is an improvement from the pre-match value of `r round(rubin1.unadj,2)`.
+
+### Rubin's Rule 2
+
+```{r}
+rubin2.match <- with(lindner_clean.matchedsample, var(linps[treated==1])/var(linps[treated==0]))
+rubin2.match
+```
+
+The new value for Rubin's Rule 2 is `r round(rubin2.match,2)`. This does not pass Rubin's Rule 2 and is not an improvement from the pre-match value of `r round(rubin2.unadj,2)`.
+
+# Task 5: Estimating the causal effect of the treatment on both outcomes after 1:1 matching without replacement
+
+## The Quantitative outcome
+
+We'll use a mixed model to estimate the effect of the treatment on `cardbill`.
+
+- The matches will be treated as a random effect (syntax "(1| matches.f)"
+
+- Treatment group will be treated as a fixed effect.
+
+- Restricted maximum likelihood (REML) used to estimate coefficient values.
+
+```{r}
+#to appease lme4, factor the matches 
+lindner_clean.matchedsample$matches.f <- as.factor(lindner_clean.matchedsample$matches)
+
+# fit the mixed model
+matched_mixedmodel.out1 <- lmer(cardbill ~ treated + (1 | matches.f), REML = TRUE, data=lindner_clean.matchedsample)
+
+summary(matched_mixedmodel.out1)
+confint(matched_mixedmodel.out1)
+```
+
+```{r, warning=FALSE, message=FALSE}
+tidy_mixed_matched <- tidy(matched_mixedmodel.out1, conf.int = TRUE, conf.level = 0.95) %>% filter(term == "treated")
+tidy_mixed_matched
+```
+
+Treated individuals were estimated to spend \$`r round(tidy_mixed_matched$estimate,2)` less (95%CI `r round(tidy_mixed_matched$conf.low,2)`, `r round(tidy_mixed_matched$conf.high,2)`) than non-treated individuals. As this result is not significant at an $\alpha$ of 0.05, a sensitivity analysis on the Quantitative outcome will not make sense.
+
+```{r}
+#check the mean cardbill in the matched sample
+lindner_clean.matchedsample %>% group_by(treated_f) %>% summarise(mean = mean(cardbill))
+
+#check the mean cardbill in the entire sample
+lindner_clean %>% group_by(treated_f) %>% summarise(mean = mean(cardbill))
+```
+
+In treated individuals, the mean `cardbill` was lower within the matched sample than the entire sample (note the mean within the control group was the same as every control participant is in the matched sample. The mean changed in the treated group as only 298/698 treated patients are in the matched sample). This is somewhat of a sanity check to assess if the mixed model results make sense. It looks like they do.
+
+## The binary outcome
+
+- We will use conditional logistic regression to estimate the log odds (and ORs) of being alive after 6 months based on treatment status.
+
+```{r}
+binary_outcome_adjusted <- survival::clogit(sixMonthSurvive ~ treated + strata(matches), data=lindner_clean.matchedsample)
+
+summary(binary_outcome_adjusted)
+```
+
+```{r}
+#Tidy model
+tidy_binary_outcome_adjusted <- tidy(binary_outcome_adjusted, exponentiate = TRUE)
+```
+
+The odds of being alive after six months were `r tidy_binary_outcome_adjusted$estimate` times higher in treated individuals than non-treated individuals (95%CI `r round(tidy_binary_outcome_adjusted$conf.low,2)`, `r round(tidy_binary_outcome_adjusted$conf.high,2)`)
+
+# Task 6 1:1 Matching With replacement
+
+- Matching **With** replacement
+
+- As we saw in the 1:1 matching without replacement, 400 treated participants were excluded from the sample. This is a waste of data. We'll address this by again matching 1 treated participant to 1 control participant. However, this time we'll match with replacement, meaning each time a control participant is matched to a treated participant, the control participant will be placed back into the pool of possible patients a treated individual can be matched to. Thus, some control participants will be matched multiple times (not all control participants have to be matched to a treated participant). In the Lindner dataset 1:1 matching with replacement is a more reasonable choice.
+
+```{r}
+X <- lindner_clean$linps ## matching on the linear propensity score
+Tr <- as.logical(lindner_clean$treated)
+match1 <- Match(Tr=Tr, X=X, M = 1, replace=TRUE, ties=FALSE) # notice replace =  TRUE
+summary(match1)
+```
+
+- Matched 698 treated individuals with 698 control participants.
+
+- To reiterate, as we matched with replacement, and there were less control participants than treated participants, some control participants were matched multiple times.
+
+Below we'll assess the match balance from the 1:1 matching with replacement.
+
+```{r}
+set.seed(20202)
+mb1 <- MatchBalance(treated ~ stent + height + female + diabetic + acutemi + ejecfrac + ves1proc + ps + linps, data=lindner_clean,
+match.out = match1, nboots=500)
+```
+
+
+Name variables in matchbalance output.
+
+```{r}
+covnames <- c("stent", "height", "female", "diabetic", "acutemi", "ejecfrac", "ves1proc", "ps", "linps")
+```
+
+Dr. Love's code to extract the standardized differences.
+
+```{r}
+pre.szd <- NULL; post.szd <- NULL
+for(i in 1:length(covnames)) {
+pre.szd[i] <- mb1$BeforeMatching[[i]]$sdiff.pooled
+post.szd[i] <- mb1$AfterMatching[[i]]$sdiff.pooled
+}
+```
+
+Table standardized differences
+
+```{r}
+match_szd <- data.frame(covnames, pre.szd, post.szd, row.names=covnames)
+print(match_szd, digits=3)
+```
+
+## Love Plot of standardized differences before and after 1:1 matching
+
+## Using ggplot
+
+Blue points are post-adjustment; white are pre-adjustment.
+
+```{r}
+lp_w_rep <- ggplot(match_szd, aes(x = pre.szd, y = reorder(covnames, pre.szd))) +
+geom_point(col = "black", size = 3, pch = 1) +
+geom_point(aes(x = post.szd, y = reorder(covnames, pre.szd)),
+size = 3, col = "blue") +
+theme_bw() +
+geom_vline(aes(xintercept = 0)) +
+geom_vline(aes(xintercept = 10), linetype = "dashed", col = "red") +
+geom_vline(aes(xintercept = -10), linetype = "dashed", col = "red") +
+labs(x = "Standardized Difference (%)", 
+     y = "",
+     title = "Love Plot",
+     subtitle = "1:1 matching with replacement")
+
+lp_w_rep
+```
+
+- Visually, the Love Plot using 1:1 matching with replacement looks pretty good.
+
+```{r}
+# comparison of love plots with and without replacement
+lp_wo_rep +  lp_w_rep
+```
+
+- It definitely looks better than the 1:1 matching without replacement.
+
+## Using `cobalt` to make the Love Plot
+
+Here's a somewhat automated way to create the Love Plot.
+
+```{r}
+cobalt_tab <- bal.tab(match1, treated ~ stent + height + female + diabetic + acutemi + ejecfrac + ves1proc + ps + linps, data=lindner_clean, un = TRUE)
+
+cobalt_tab
+```
+
+```{r}
+p <- love.plot(cobalt_tab, threshold = .1, size = 1.5,
+var.order = "unadjusted",
+title = "Standardized Differences after 1:1 Matching With Replacement",
+stars = "std")
+
+p + theme_bw()
+```
+
+## Extracting Variance Ratios
+
+```{r}
+pre.vratio <- NULL; post.vratio <- NULL
+for(i in 1:length(covnames)) {
+pre.vratio[i] <- mb1$BeforeMatching[[i]]$var.ratio
+post.vratio[i] <- mb1$AfterMatching[[i]]$var.ratio
+}
+## Table of Variance Ratios
+match_vrat <- data.frame(names = covnames, pre.vratio, post.vratio, row.names=covnames)
+print(match_vrat, digits=2)
+```
+
+## Creating a dataframe containing the matched sample
+
+```{r}
+matches <- factor(rep(match1$index.treated, 2))
+lindner_clean.matchedsample <- cbind(matches, lindner_clean[c(match1$index.control, match1$index.treated),])
+
+# Check to see if sample makes sense
+lindner_clean.matchedsample %>% count(treated_f)
+```
+
+## Reassessing Rubin's Rules after 1:1 matching with replacement
+
+### Rubin's Rule 1
+
+```{r}
+rubin1.match.rep <- with(lindner_clean.matchedsample,
+abs(100*(mean(linps[treated==1])-mean(linps[treated==0]))/sd(linps)))
+rubin1.match.rep
+```
+
+The new value for Rubin's Rule 1 is `r round(rubin1.match.rep, 2)`. This value passes Rubin's Rule 1 and is an improvement from the Rubin's Rule 1 value obtained during 1:1 matching without replacement, `r round(rubin1.match,2)`. The pre-match value was `r round(rubin1.unadj,2)`.
+
+### Rubin's Rule 2
+
+```{r}
+rubin2.match.rep <- with(lindner_clean.matchedsample, var(linps[treated==1])/var(linps[treated==0]))
+rubin2.match.rep
+```
+
+The new value for Rubin's Rule 2 is `r round(rubin2.match.rep, 2)`. This passes Rule 2 and is an improvement from the Rubin's Rule 2 value obtained during 1:1 matching without replacement, `r round(rubin2.match,2)`. The pre-match value was `r round(rubin2.unadj,2)`.
+
+## Estimating the causal effect of the treatment on both outcomes after 1:1 matching with replacement
+
+### The Quantitative outcome
+
+We'll use a mixed model to estimate the effect of the treatment on `cardbill`.
+
+- The matches will be treated as a random effect (syntax "(1| matches.f)"
+
+- Treatment group will be treated as a fixed effect.
+
+- Restricted maximum likelihood (REML) used to estimate coefficient values.
+
+```{r}
+#to appease lme4, factor the matches 
+lindner_clean.matchedsample$matches.f <- as.factor(lindner_clean.matchedsample$matches)
+
+# fit the mixed model
+matched_mixedmodel.rep.out1 <- lmer(cardbill ~ treated + (1 | matches.f), REML = TRUE, data=lindner_clean.matchedsample)
+
+summary(matched_mixedmodel.rep.out1)
+confint(matched_mixedmodel.rep.out1)
+```
+
+```{r, warning=FALSE, message=FALSE}
+tidy_mixed_matched_rep <- tidy(matched_mixedmodel.rep.out1, conf.int = TRUE, conf.level = 0.95) %>% filter(term == "treated")
+tidy_mixed_matched_rep
+```
+
+Treated individuals were estimated to spend \$`r round(tidy_mixed_matched_rep$estimate,2)` less (95%CI `r round(tidy_mixed_matched_rep$conf.low,2)`, `r round(tidy_mixed_matched_rep$conf.high,2)`) than non-treated individuals. This finding is not significant at an $\alpha$ of 0.05, thus, the sensitivity analysis on the Quantitative outcome will still not make sense.
+
+
+```{r}
+#sanity check for mondel
+lindner_clean.matchedsample %>% group_by(treated_f) %>% summarise(mean_card = mean(cardbill))
+```
+
+- The mixed model above predicted treated individuals would spend roughly \$`r round(tidy_mixed_matched_rep$estimate,2)` less than control participants. After doing a quick check of the mean `cardbill` within the matched sample, the mixed model results make sense. 
+
+### The binary outcome
+
+- We will use conditional logistic regression to estimate the log odds (and ORs) of being alive after 6 months based on treatment status.
+
+```{r}
+binary_outcome_adjusted_rep <- survival::clogit(sixMonthSurvive ~ treated + strata(matches), data=lindner_clean.matchedsample)
+
+summary(binary_outcome_adjusted_rep)
+```
+
+```{r}
+#Tidy model
+tidy_binary_outcome_adjusted_rep <- tidy(binary_outcome_adjusted_rep, exponentiate = TRUE)
+```
+
+The odds of being alive after six months were `r round(tidy_binary_outcome_adjusted_rep$estimate,2)` times higher in treated individuals than non-treated individuals (95%CI `r round(tidy_binary_outcome_adjusted_rep$conf.low,2)`, `r round(tidy_binary_outcome_adjusted_rep$conf.high,2)`)
+
+
+# Task 7: Subclassification by PS quintile
+
+```{r}
+#cut into quintiles
+lindner_clean$stratum <- Hmisc::cut2(lindner_clean$ps, g=5)
+lindner_clean$quintile <- factor(lindner_clean$stratum, labels=1:5)
+
+#Sanity check: check to make sure quntiles are evenish, numbers make sense, etc.
+lindner_clean %>% count(stratum, quintile) 
+```
+
+## Check Balance and Propensity Score Overlap in Each Quintile
+
+### Numerically
+
+Only 20 control individuals were contained in the largest quintile. This is seems low. 
+
+```{r}
+lindner_clean %>% count(quintile, treated_f)
+```
+
+
+### Graphically
+
+```{r}
+ggplot(lindner_clean, aes(x = treated_f, y = round(ps,2), group = quintile, color = treated_f)) +
+geom_jitter(width = 0.2) +
+guides(color = FALSE) +
+facet_wrap(~ quintile, scales = "free_y") +
+labs(x = "", y = "Propensity for Treatment",
+title = "Quintile Subclassification in the Lindner data")
+```
+
+## Creating a Standardized Difference Calculation Function
+
+Dr. Love's function to calculate the standardizes differences is utilized below.
+
+```{r}
+szd <- function(covlist, g) {
+covlist2 <- as.matrix(covlist)
+g <- as.factor(g)
+res <- NA
+for(i in 1:ncol(covlist2)) {
+cov <- as.numeric(covlist2[,i])
+num <- 100*diff(tapply(cov, g, mean, na.rm=TRUE))
+den <- sqrt(mean(tapply(cov, g, var, na.rm=TRUE)))
+res[i] <- round(num/den,2)
+}
+names(res) <- names(covlist)
+res
+}
+```
+
+Split data into quintiles - and give them each their own dataframe.
+
+```{r}
+quin1 <- filter(lindner_clean, quintile==1)
+quin2 <- filter(lindner_clean, quintile==2)
+quin3 <- filter(lindner_clean, quintile==3)
+quin4 <- filter(lindner_clean, quintile==4)
+quin5 <- filter(lindner_clean, quintile==5)
+```
+
+Now we'll run the function above to calculate the standardized differences for each covariate in each quintile.
+
+```{r}
+covs <- c("stent", "height", "female", "diabetic", "acutemi", "ejecfrac", "ves1proc", "ps", "linps")
+d.q1 <- szd(quin1[covs], quin1$treated)
+d.q2 <- szd(quin2[covs], quin2$treated)
+d.q3 <- szd(quin3[covs], quin3$treated)
+d.q4 <- szd(quin4[covs], quin4$treated)
+d.q5 <- szd(quin5[covs], quin5$treated)
+d.all <- szd(lindner_clean[covs], lindner_clean$treated)
+lindner_clean.szd <- data_frame(covs, Overall = d.all, Q1 = d.q1, Q2 = d.q2, Q3 = d.q3, Q4 = d.q4, Q5 = d.q5)
+lindner_clean.szd <- gather(lindner_clean.szd, "quint", "sz.diff", 2:7)
+```
+
+## Plotting the post-subclassification standardized differences 
+
+```{r}
+ggplot(lindner_clean.szd, aes(x = sz.diff, y = reorder(covs, -sz.diff), group = quint)) +
+geom_point() +
+geom_vline(xintercept = 0) +
+geom_vline(xintercept = c(-10,10), linetype = "dashed", col = "blue") +
+facet_wrap(~ quint) +
+labs(x = "Standardized Difference, %", y = "",
+title = "Comparing Standardized Differences by PS Quintile")
+```
+
+The results of the standardized differences by quintile are varied.
+
+## Rubin's Rules post subclassification
+
+### Rule 1
+
+```{r}
+rubin1.q1 <- with(quin1, abs(100*(mean(linps[treated==1]) - mean(linps[treated==0]))/sd(linps)))
+
+rubin1.q2 <- with(quin2, abs(100*(mean(linps[treated==1]) -mean(linps[treated==0]))/sd(linps)))
+
+rubin1.q3 <- with(quin3, abs(100*(mean(linps[treated==1]) -mean(linps[treated==0]))/sd(linps)))
+
+rubin1.q4 <- with(quin4, abs(100*(mean(linps[treated==1]) -mean(linps[treated==0]))/sd(linps)))
+
+rubin1.q5 <- with(quin5, abs(100*(mean(linps[treated==1]) -mean(linps[treated==0]))/sd(linps)))
+
+rubin1.sub <- c(rubin1.q1, rubin1.q2, rubin1.q3, rubin1.q4, rubin1.q5)
+names(rubin1.sub)=c("Q1", "Q2", "Q3", "Q4", "Q5")
+
+rubin1.sub
+```
+
+All under 50. Not great, but OK. For comparison, the original Rubin's Rule 1 value was 61.87.
+
+### Rule 2
+
+```{r}
+rubin2.q1 <- with(quin1, var(linps[treated==1])/var(linps[treated==0]))
+rubin2.q2 <- with(quin2, var(linps[treated==1])/var(linps[treated==0]))
+rubin2.q3 <- with(quin3, var(linps[treated==1])/var(linps[treated==0]))
+rubin2.q4 <- with(quin4, var(linps[treated==1])/var(linps[treated==0]))
+rubin2.q5 <- with(quin5, var(linps[treated==1])/var(linps[treated==0]))
+
+rubin2.sub <- c(rubin2.q1, rubin2.q2, rubin2.q3, rubin2.q4, rubin2.q5)
+names(rubin2.sub)=c("Q1", "Q2", "Q3", "Q4", "Q5")
+rubin2.sub
+```
+
+All but Q1 are at least close to passing Rule 2.  For comparison, the original Rubin's Rule 2 value was 1.67.
+
+# Task 8: Estimated effect after subclassification
+
+## Quantitative outcome
+
+```{r}
+quin1.out1 <- lm(cardbill ~ treated, data=quin1)
+quin2.out1 <- lm(cardbill ~ treated, data=quin2)
+quin3.out1 <- lm(cardbill ~ treated, data=quin3)
+quin4.out1 <- lm(cardbill ~ treated, data=quin4)
+quin5.out1 <- lm(cardbill ~ treated, data=quin5)
+
+coef(summary(quin1.out1)); coef(summary(quin2.out1)); coef(summary(quin3.out1)); coef(summary(quin4.out1)); coef(summary(quin5.out1)) 
+```
+
+The mean of the five quintile-specific estimated regression coefficients is below.
+
+```{r}
+est.st <- (coef(quin1.out1)[2] + coef(quin2.out1)[2] + coef(quin3.out1)[2] +
+coef(quin4.out1)[2] + coef(quin5.out1)[2])/5
+
+est.st
+```
+
+The mean SE is below.
+
+```{r}
+se.q1 <- summary(quin1.out1)$coefficients[2,2]
+se.q2 <- summary(quin2.out1)$coefficients[2,2]
+se.q3 <- summary(quin3.out1)$coefficients[2,2]
+se.q4 <- summary(quin4.out1)$coefficients[2,2]
+se.q5 <- summary(quin5.out1)$coefficients[2,2]
+
+se.st <- sqrt((se.q1^2 + se.q2^2 + se.q3^2 + se.q4^2 + se.q5^2)*(1/25))
+se.st
+```
+
+The mean estimate, with a 95%CI, is below.
+
+```{r}
+strat.result1 <- data_frame(estimate = est.st,
+conf.low = est.st - 1.96*se.st,
+conf.high = est.st + 1.96*se.st)
+strat.result1
+```
+
+So treated individuals were estimated to spend \$`r round(strat.result1$estimate, 2)` more (95%CI `r round(strat.result1$conf.low, 2)`, `r round(strat.result1$conf.high, 2)`) than non treated individuals.
+
+## Binary Outcome
+
+```{r}
+quin1.out2 <- glm(sixMonthSurvive ~ treated, data=quin1, family=binomial())
+quin2.out2 <- glm(sixMonthSurvive ~ treated, data=quin2, family=binomial())
+quin3.out2 <- glm(sixMonthSurvive ~ treated, data=quin3, family=binomial())
+quin4.out2 <- glm(sixMonthSurvive ~ treated, data=quin4, family=binomial())
+quin5.out2 <- glm(sixMonthSurvive ~ treated, data=quin5, family=binomial())
+
+coef(summary(quin1.out2)); coef(summary(quin2.out2)); coef(summary(quin3.out2)); coef(summary(quin4.out2)); coef(summary(quin5.out2))
+```
+
+Estimated log-odds (averaged over the quintiles).
+
+```{r}
+est.st.log <- (coef(quin1.out2)[2] + coef(quin2.out2)[2] + coef(quin3.out2)[2] +
+coef(quin4.out2)[2] + coef(quin5.out2)[2])/5
+
+est.st.log
+```
+
+Estimated odds ratio (averaged over the quintiles).
+
+```{r}
+exp(est.st.log)
+```
+
+The average SE (averaged over the quintiles).
+
+```{r}
+se.q1.log <- summary(quin1.out2)$coefficients[2,2]
+se.q2.log <- summary(quin2.out2)$coefficients[2,2]
+se.q3.log <- summary(quin3.out2)$coefficients[2,2]
+se.q4.log <- summary(quin4.out2)$coefficients[2,2]
+se.q5.log <- summary(quin5.out2)$coefficients[2,2]
+
+se.st.log <- sqrt((se.q1.log^2 + se.q2.log^2 + se.q3.log^2 + se.q4.log^2 + se.q5.log^2)*(1/25))
+se.st.log #log odds
+```
+
+```{r}
+strat.result2 <- data_frame(estimate = exp(est.st.log),
+conf.low = exp(est.st.log - 1.96*se.st.log),
+conf.high = exp(est.st.log + 1.96*se.st.log))
+
+strat.result2
+```
+
+The odds of being alive after 6 months was `r round(strat.result2$estimate, 2)` times higher (95%CI `r round(strat.result2$conf.low, 2)`, `r round(strat.result2$conf.high, 2)`) in treated individuals than non-treated individuals. 
+
+# Task 9: Weighting
+
+## Calculating the ATT and ATE weights
+
+### ATT weights
+
+- Average treatment effect on the treated (ATT)
+
+- Weight treated subjects as 1; control subjects as ps/(1-ps)
+
+```{r}
+lindner_clean$wts1 <- ifelse(lindner_clean$treated==1, 1, lindner_clean$ps/(1-lindner_clean$ps))
+```
+
+### ATE weights
+
+- Average treatment effect (ATE)
+
+- Weight treated subjects by 1/ps; Control subjects by 1/(1-PS)
+
+```{r}
+lindner_clean$wts2 <- ifelse(lindner_clean$treated==1, 1/lindner_clean$ps, 1/(1-lindner_clean$ps))
+```
+
+## Working with the ATT weights
+
+```{r}
+ggplot(lindner_clean, aes(x = ps, y = wts1, color = treated_f)) +
+geom_point() +
+guides(color = FALSE) +
+facet_wrap(~ treated_f) +
+labs(x = "Estimated Propensity for Treatment",
+y = "ATT weight",
+title = "ATT weighting structure")
+```
+
+```{r}
+#turn dataset into a dataframe for twang (its a tibble now)
+lindner_clean_df <- data.frame(lindner_clean)
+
+#name covariates
+covlist <- c("stent", "height", "female", "diabetic", "acutemi", "ejecfrac", "ves1proc", "ps", "linps")
+```
+
+```{r}
+bal.wts1 <- dx.wts(x=lindner_clean_df$wts1, data=lindner_clean_df, vars=covlist,
+treat.var="treated", estimand="ATT")
+
+bal.wts1
+```
+
+```{r}
+bal.table(bal.wts1)
+```
+
+Calculate %s and tibble data.
+
+```{r}
+bal.before.wts1 <- bal.table(bal.wts1)[1]
+bal.after.wts1 <- bal.table(bal.wts1)[2]
+balance.att.weights <- data_frame(names = rownames(bal.before.wts1$unw),
+pre.weighting = 100*bal.before.wts1$unw$std.eff.sz,
+ATT.weighted = 100*bal.after.wts1[[1]]$std.eff.sz)
+balance.att.weights <- gather(balance.att.weights, timing, szd, 2:3)
+```
+
+Now we can plot the standardized differences after ATT weighting.
+
+```{r}
+ggplot(balance.att.weights, aes(x = szd, y = reorder(names, szd), color = timing)) +
+geom_point() +
+geom_vline(xintercept = 0) +
+geom_vline(xintercept = c(-10,10), linetype = "dashed", col = "blue") +
+labs(x = "Standardized Difference", y = "",
+title = "Standardized Difference before and after ATT Weighting")
+```
+
+The standardized differences look much better here.
+
+### Rubin's Rules
+
+#### Rule 1
+
+**Numbers from balance table above**: (-0.048 * 100)  = 4.8%. So passes Rule 1.
+
+#### Rule 2
+
+**Numbers from balance table above**:(0.796^2^)/(0.839^2^) = 0.9001237. Passes Rule 2
+
+### Estimated effect on outcomes after ATT weighting
+
+#### Quantitative outcome
+
+To estimate the effect of the treatment on `cardbill`, we'll use svyglm from the `survey` package to apply the ATT weights in a linear model.  
+
+```{r}
+lindnerwt1.design <- svydesign(ids=~1, weights=~wts1, data=lindner_clean) # using ATT weights
+
+adjout1.wt1 <- svyglm(cardbill ~ treated, design=lindnerwt1.design)
+
+wt_att_results1 <- tidy(adjout1.wt1, conf.int = TRUE) %>% filter(term == "treated")
+
+wt_att_results1
+```
+
+**Estimate (95%CI)** `r round(wt_att_results1$estimate,2)` (`r round(wt_att_results1$conf.low,2)`, `r round(wt_att_results1$conf.high,2)`)
+
+#### Binary outcome
+
+We'll do similar coding for the binary outcome.
+
+```{r}
+adjout2.wt1 <- svyglm(sixMonthSurvive ~ treated, design=lindnerwt1.design, family=quasibinomial())
+
+wt_att_results2 <- tidy(adjout2.wt1, conf.int = TRUE, exponentiate = TRUE) %>%
+filter(term == "treated")
+wt_att_results2
+```
+
+**Estimate (95%CI)** `r round(wt_att_results2$estimate,2)` (`r round(wt_att_results2$conf.low,2)`, `r round(wt_att_results2$conf.high,2)`)
+
+## Working with the ATE weights
+
+We'll go through the same steps with the ATE weights.
+
+```{r}
+ggplot(lindner_clean, aes(x = ps, y = wts2, color = treated_f)) +
+geom_point() +
+guides(color = FALSE) +
+facet_wrap(~ treated_f) +
+labs(x = "Estimated Propensity for Treatment",
+y = "ATE weights",
+title = "ATE weighting structure")
+```
+
+```{r}
+bal.wts2 <- dx.wts(x=lindner_clean_df$wts2, data=lindner_clean_df, vars=covlist,
+treat.var="treated", estimand="ATE")
+
+bal.wts2
+```
+
+```{r}
+bal.table(bal.wts2)
+```
+
+```{r}
+bal.before.wts2 <- bal.table(bal.wts2)[1]
+bal.after.wts2 <- bal.table(bal.wts2)[2]
+balance.ate.weights <- data_frame(names = rownames(bal.before.wts2$unw),
+pre.weighting = 100*bal.before.wts2$unw$std.eff.sz,
+
+ATE.weighted = 100*bal.after.wts2[[1]]$std.eff.sz)
+balance.ate.weights <- gather(balance.ate.weights, timing, szd, 2:3)
+```
+
+```{r}
+ggplot(balance.ate.weights, aes(x = szd, y = reorder(names, szd), color = timing)) +
+geom_point() +
+geom_vline(xintercept = 0) +
+geom_vline(xintercept = c(-10,10), linetype = "dashed", col = "blue") +
+labs(x = "Standardized Difference", y = "",
+title = "Standardized Difference before and after ATE Weighting")
+```
+
+Again, the standardized differences look good here.
+
+### Rubin's Rules
+
+#### Rule 1
+
+-0.033*100 = 3.3%. Passes Rule 1 (numbers from ATE weight balance table above).
+
+#### Rule 2
+
+(0.774^2^)/(0.815^2^) = 0.9019173. Passes Rule 2 (numbers from ATE weight balance table above).
+
+### Estimated effect on outcomes after ATE weighting
+
+#### Quantitative outcome
+
+```{r}
+lindnerwt2.design <- svydesign(ids=~1, weights=~wts2, data=lindner_clean) # using ATE weights
+
+adjout1.wt2 <- svyglm(cardbill ~ treated, design=lindnerwt2.design)
+
+wt_ate_results1 <- tidy(adjout1.wt2, conf.int = TRUE) %>% filter(term == "treated")
+wt_ate_results1
+```
+
+**Estimate (95%CI)** `r round(wt_ate_results1$estimate, 2)` (`r round(wt_ate_results1$conf.low,2)`, `r round(wt_ate_results1$conf.high,2)`)
+
+#### Binary outcome
+
+```{r}
+adjout2.wt2 <- svyglm(sixMonthSurvive ~ treated, design=lindnerwt2.design, family=quasibinomial())
+
+wt_ate_results2 <- tidy(adjout2.wt2, conf.int = TRUE, exponentiate = TRUE) %>%
+filter(term == "treated")
+wt_ate_results2
+```
+
+**Estimate/OR (95%CI)** `r round(wt_ate_results2$estimate,2)` (`r round(wt_ate_results2$conf.low,2)`, `r round(wt_ate_results2$conf.high,2)`)
+
+# Task 10: Using TWANG for PS estimation and ATT weighting
+
+```{r}
+ps.toy <- ps(treated ~ stent + height + female + diabetic + acutemi + ejecfrac + ves1proc,
+data = lindner_clean_df,
+n.trees = 3000,
+interaction.depth = 2,
+stop.method = c("es.mean"),
+estimand = "ATT",
+verbose = FALSE)
+
+```
+
+```{r}
+plot(ps.toy)
+```
+
+```{r}
+summary(ps.toy)
+```
+
+```{r}
+plot(ps.toy, plots = 2)
+```
+
+```{r}
+plot(ps.toy, plots = 3)
+```
+
+```{r}
+bal.tab(ps.toy, full.stop.method = "es.mean.att")
+```
+
+```{r}
+p <- love.plot(bal.tab(ps.toy),
+threshold = .1, size = 1.5,
+title = "Standardized Differences and TWANG ATT Weighting")
+p + theme_bw()
+```
+
+Compared to the manual ATT/ATE weights, the standardized differences look a bit worse here.
+
+## Estimated effect on outcomes after TWANG ATT weighting
+
+### Quantitative outcome
+
+```{r}
+toywt3.design <- svydesign(ids=~1,
+weights=~get.weights(ps.toy,
+stop.method = "es.mean"),
+data=lindner_clean) # using twang ATT weights
+
+adjout1.wt3 <- svyglm(cardbill ~ treated, design=toywt3.design)
+wt_twangatt_results1 <- tidy(adjout1.wt3, conf.int = TRUE) %>% filter(term == "treated")
+wt_twangatt_results1
+```
+
+**Estimate (95%CI)** `r round(wt_twangatt_results1$estimate,2)` (`r round(wt_twangatt_results1$conf.low,2)`, `r round(wt_twangatt_results1$conf.high,2)`)
+
+### Binary outcome
+
+```{r}
+adjout2.wt3 <- svyglm(sixMonthSurvive ~ treated, design=toywt3.design,
+family=quasibinomial())
+
+wt_twangatt_results2 <- tidy(adjout2.wt3, conf.int = TRUE, exponentiate = TRUE) %>%
+filter(term == "treated")
+wt_twangatt_results2
+```
+
+**Estimate (95%CI)** `r round(wt_twangatt_results2$estimate,2)` (`r round(wt_twangatt_results2$conf.low,2)`, `r round(wt_twangatt_results2$conf.high,2)`)
+
+# Task 11: After direct adjustment with linear PS
+
+Here we'll directly adjust for the linear PS by including it as a covariate in the model.
+
+## Quantitative outcome
+
+```{r}
+direct_out1 <- lm(cardbill ~ treated + linps, data=lindner_clean)
+
+adj_out1 <- tidy(direct_out1, conf.int = TRUE) %>% filter(term == "treated")
+adj_out1
+```
+
+**Estimate (95%CI)** `r round(adj_out1$estimate,2)` (`r round(adj_out1$conf.low,2)`, `r round(adj_out1$conf.high,2)`)
+
+## Binary outcome
+
+```{r}
+direct_out2 <- glm(sixMonthSurvive ~ treated + linps, data=lindner_clean, family=binomial())
+
+adj_out2 <- tidy(direct_out2, exponentiate = TRUE, conf.int = TRUE) %>%
+filter(term == "treated")
+adj_out2
+```
+
+**Estimate/OR (95%CI)** `r round(adj_out2$estimate,2)` (`r round(adj_out2$conf.low,2)`, `r round(adj_out2$conf.high,2)`)
+
+# Task 12: "Double Robust" Approach: Weighting + Direct Adjustment
+
+Here we'll adjust for the linear propensity score and the ATT/ATE/TWANG weights when predicting the Quantitative outcome.
+
+## Quantitative outcome
+
+### ATT weights
+
+```{r}
+design_att <- svydesign(ids=~1, weights=~wts1, data=lindner_clean) # using ATT weights
+
+dr.out1.wt1 <- svyglm(cardbill ~ treated + linps, design=design_att)
+dr_att_out1 <- tidy(dr.out1.wt1, conf.int = TRUE) %>% filter(term == "treated")
+dr_att_out1
+```
+
+**Estimate (95%CI)** `r round(dr_att_out1$estimate,2)` (`r round(dr_att_out1$conf.low,2)`, `r round(dr_att_out1$conf.high,2)`)
+
+### ATE weights
+
+```{r}
+design_ate<- svydesign(ids=~1, weights=~wts2, data=lindner_clean) # using ATE weights
+
+dr.out1.wt2 <- svyglm(cardbill ~ treated + linps, design=design_ate)
+dr_ate_out1 <- tidy(dr.out1.wt2, conf.int = TRUE) %>% filter(term == "treated")
+dr_ate_out1
+```
+
+**Estimate (95%CI)** `r round(dr_ate_out1$estimate,2)` (`r round(dr_ate_out1$conf.low,2)`, `r round(dr_ate_out1$conf.high,2)`)
+
+### TWANG ATT weights
+
+```{r}
+wts3 <- get.weights(ps.toy, stop.method = "es.mean")
+twang.design <- svydesign(ids=~1, weights=~wts3, data=lindner_clean) # twang ATT weights
+
+dr.out1.wt3 <- svyglm(cardbill ~ treated + linps, design=twang.design)
+dr_twangatt_out1 <- tidy(dr.out1.wt3, conf.int = TRUE) %>% filter(term == "treated")
+dr_twangatt_out1
+```
+
+**Estimate (95%CI)** `r round(dr_twangatt_out1$estimate,2)` (`r round(dr_twangatt_out1$conf.low,2)`, `r round(dr_twangatt_out1$conf.high,2)`)
+
+## Binary outcome
+
+Now we'll adjust for the linear propensity score and the ATT/ATE/TWANG weights when predicting the binary outcome.
+
+### ATT weights
+
+```{r}
+dr.out2.wt1 <- svyglm(sixMonthSurvive ~ treated + linps, design=design_att,
+family=quasibinomial())
+
+dr_att_out2 <- tidy(dr.out2.wt1, exponentiate = TRUE, conf.int = TRUE) %>%
+filter(term == "treated")
+dr_att_out2
+```
+
+**Estimate (95%CI)** `r round(dr_att_out2$estimate,2)` (`r round(dr_att_out2$conf.low,2)`, `r round(dr_att_out2$conf.high,2)`)
+
+### ATE weights
+
+```{r}
+dr.out2.wt2 <- svyglm(sixMonthSurvive ~ treated + linps, design=design_ate,
+family=quasibinomial())
+
+dr_ate_out2 <- tidy(dr.out2.wt2, exponentiate = TRUE, conf.int = TRUE) %>%
+filter(term == "treated")
+dr_ate_out2
+```
+
+**Estimate (95%CI)** `r round(dr_ate_out2$estimate,2)` (`r round(dr_ate_out2$conf.low,2)`, `r round(dr_ate_out2$conf.high,2)`)
+
+### TWANG ATT weights
+
+```{r}
+dr.out2.wt3 <- svyglm(sixMonthSurvive ~ treated + linps, design=twang.design,
+family=quasibinomial())
+
+dr_twangatt_out2 <- tidy(dr.out2.wt3, exponentiate = TRUE, conf.int = TRUE) %>%
+filter(term == "treated")
+dr_twangatt_out2
+```
+
+
+**Estimate (95%CI)** `r round(dr_twangatt_out2$estimate,2)` (`r round(dr_twangatt_out2$conf.low,2)`, `r round(dr_twangatt_out2$conf.high,2)`)
+
+
+```{r}
+sessioninfo::session_info()
+```
+
+
+
