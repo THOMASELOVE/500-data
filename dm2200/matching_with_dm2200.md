@@ -1,7 +1,7 @@
 Propensity Matching and the dm2200 Data
 ================
 Thomas E. Love, Ph.D.
-2020-01-24
+2020-01-26
 
   - [Setup](#setup)
   - [The `dm2200` data set](#the-dm2200-data-set)
@@ -15,6 +15,7 @@ Thomas E. Love, Ph.D.
   - [`match_1` 1:1 greedy matching without replacement with the
     `Matching`
     package](#match_1-11-greedy-matching-without-replacement-with-the-matching-package)
+      - [ATT vs. ATE vs. ATC estimates](#att-vs.-ate-vs.-atc-estimates)
       - [Obtaining the Matched Sample](#obtaining-the-matched-sample)
       - [Checking Covariate Balance for our 1:1 Greedy
         Match](#checking-covariate-balance-for-our-11-greedy-match)
@@ -75,6 +76,8 @@ Thomas E. Love, Ph.D.
             Differences](#using-love.plot-to-look-at-standardized-differences-3)
           - [Using `love.plot` to look at Variance
             Ratios](#using-love.plot-to-look-at-variance-ratios-3)
+  - [Planned matches coming as soon as Dr. Love finishes
+    them](#planned-matches-coming-as-soon-as-dr.-love-finishes-them)
   - [Outcome Models](#outcome-models)
       - [Unadjusted Models prior to Propensity
         Matching](#unadjusted-models-prior-to-propensity-matching)
@@ -374,6 +377,26 @@ Matched number of observations...............  200
 Matched number of observations  (unweighted).  200 
 ```
 
+## ATT vs. ATE vs. ATC estimates
+
+Note that in each of the matched samples we build, we’ll focus on ATT
+estimates (average treated effect on the treated) rather than ATE
+estimates. This means that in our matching we’re trying to mirror the
+population represented by the “treated” sample we observed.
+
+  - To obtain ATE estimates rather than ATT with the `Match` function
+    from the `Matching` package, use `estimand = "ATE"` in the process
+    of developing the matched sample.
+  - To obtain ATC estimates (average treatment effect on the controls),
+    use `estimand = "ATC"`.
+
+I encourage the use of ATT estimates in your projects, where possible. I
+suggest also that you define the “treated” group (the one that the
+propensity score is estimating) to be the smaller of the two groups you
+have, to facilitate this approach. If you estimate ATE or ATC instead of
+ATT, of course, you are answering a different question than what ATT
+resolves.
+
 ## Obtaining the Matched Sample
 
 Now, we build a new matched sample data frame in order to do some of the
@@ -404,26 +427,26 @@ dm2200_matched1 %>% head()
 
 ``` 
   match1_matches subject exposure age     race hisp sex     insur nincome
-1              1  S-1640        B  56    White    0   M Uninsured   86600
+1              1  S-0728        B  64 Black_AA    0   F  Medicaid   12600
 2              4  S-1650        B  48 Black_AA    0   M  Medicaid   22100
 3             17  S-0834        B  61 Black_AA    0   M  Medicaid   31500
 4             26  S-1705        B  72 Black_AA    0   F  Medicare   19600
 5             27  S-0678        B  36 Black_AA    0   F  Medicaid   16600
-6             37  S-1007        B  49 Black_AA    0   M  Medicaid   29800
+6             37  S-0765        B  39 Black_AA    0   M Uninsured   35000
   nhsgrad cleve height_cm weight_kg  bmi  a1c sbp dbp ldl visits tobacco statin
-1      92     0       185       136 39.7  6.9 121  62  71      3  Former      1
+1      78     1       152        81 35.1  6.9 134  76 140      3  Former      1
 2      80     1       172       134 45.3  5.1  98  66 121      3   Never      1
 3      80     1       183        94 28.1  6.5 127  79 137      3 Current      1
 4      87     1       152        74 32.0  6.8 134  69 129      4 Current      1
 5      79     1       160        80 31.3 14.5 142  95 157      5 Current      1
-6      82     1       170        74 25.6 12.1 138  80 126      3 Current      1
+6      82     0       185       125 36.5  7.3 138  83 119      4 Current      1
   ace_arb betab depr_dx eyeex pneumo bp_good treat         ps      linps
-1       1     1       0     0      1       1 FALSE 0.03776720 -3.2378153
+1       1     1       1     1      1       1 FALSE 0.03767221 -3.2404325
 2       1     0       0     0      0       1 FALSE 0.62855155  0.5260079
 3       1     0       1     0      1       1 FALSE 0.33963493 -0.6649215
 4       1     1       0     1      1       1 FALSE 0.07539326 -2.5066506
 5       0     1       0     1      0       0 FALSE 0.40466703 -0.3860563
-6       1     0       0     0      1       1 FALSE 0.41799059 -0.3310277
+6       1     0       1     1      0       1 FALSE 0.41908241 -0.3265413
 ```
 
 ## Checking Covariate Balance for our 1:1 Greedy Match
@@ -446,34 +469,34 @@ bal1
 
     Balance Measures
                         Type Diff.Un V.Ratio.Un Diff.Adj V.Ratio.Adj
-    age              Contin.  0.4076     1.3195  -0.0239      1.1938
-    race_Asian        Binary  0.0025             -0.0050            
+    age              Contin.  0.4076     1.3195  -0.0952      1.3038
+    race_Asian        Binary  0.0025              0.0000            
     race_Black_AA     Binary -0.2975              0.0100            
-    race_Other        Binary  0.0320             -0.0050            
-    race_White        Binary  0.2630              0.0000            
-    hisp              Binary  0.0320             -0.0050            
+    race_Other        Binary  0.0320              0.0000            
+    race_White        Binary  0.2630             -0.0100            
+    hisp              Binary  0.0320              0.0000            
     sex_M             Binary -0.2190             -0.0550            
-    insur_Commercial  Binary  0.2200              0.0100            
-    insur_Medicaid    Binary -0.3745             -0.0050            
+    insur_Commercial  Binary  0.2200             -0.0100            
+    insur_Medicaid    Binary -0.3745              0.0100            
     insur_Medicare    Binary  0.2715              0.0100            
-    insur_Uninsured   Binary -0.1170             -0.0150            
-    nincome          Contin.  0.5306     3.2086  -0.0216      1.4032
-    nhsgrad          Contin.  0.3958     0.9727  -0.0401      0.9723
-    cleve             Binary -0.3505              0.0100            
-    a1c              Contin. -0.0419     0.8190   0.0207      1.0897
-    ldl              Contin.  0.0783     0.9012  -0.0004      0.9541
-    visits           Contin. -0.6304     0.4602  -0.2726      0.8152
-    tobacco_Current   Binary -0.3175             -0.0300            
-    tobacco_Former    Binary  0.1575              0.0350            
-    tobacco_Never     Binary  0.1600             -0.0050            
-    statin            Binary  0.0315             -0.0450            
+    insur_Uninsured   Binary -0.1170             -0.0100            
+    nincome          Contin.  0.5306     3.2086  -0.0073      1.3392
+    nhsgrad          Contin.  0.3958     0.9727   0.0203      0.9329
+    cleve             Binary -0.3505             -0.0200            
+    a1c              Contin. -0.0419     0.8190  -0.0056      1.0616
+    ldl              Contin.  0.0783     0.9012  -0.0177      0.9128
+    visits           Contin. -0.6304     0.4602  -0.2445      0.8057
+    tobacco_Current   Binary -0.3175             -0.0150            
+    tobacco_Former    Binary  0.1575              0.0300            
+    tobacco_Never     Binary  0.1600             -0.0150            
+    statin            Binary  0.0315             -0.0400            
     ace_arb           Binary -0.0345             -0.0200            
-    betab             Binary  0.1255              0.0200            
-    depr_dx           Binary  0.1115              0.0400            
-    eyeex             Binary  0.0925             -0.0100            
-    pneumo            Binary  0.3030              0.0850            
-    ps               Contin. -2.9189     0.1576  -0.7385      0.4791
-    linps            Contin. -1.7842     1.3395  -0.2127      0.5378
+    betab             Binary  0.1255              0.0350            
+    depr_dx           Binary  0.1115              0.0650            
+    eyeex             Binary  0.0925              0.0450            
+    pneumo            Binary  0.3030              0.0750            
+    ps               Contin. -2.9189     0.1576  -0.7382      0.4790
+    linps            Contin. -1.7842     1.3395  -0.2126      0.5378
     
     Sample sizes
                 A    B
@@ -517,12 +540,12 @@ rubin_report_m1 %>% knitr::kable(digits = 2)
       - Multiply these by 100 to describe them as percentages, adjusting
         the cutoff to below 50 in absolute value.
       - Here, before matching we have a bias of 206.5005338%, and this
-        is reduced to 24.6147957% after 1:1 greedy matching.
+        is reduced to 24.6020536% after 1:1 greedy matching.
   - The Rule 2 results tell us about the variance ratio of the linear
     propensity scores. We want this to be within (0.5, 2) and ideally
     within (0.8, 1.25).
       - Here, before matching we have a variance ratio of 74.6560482%,
-        and this becomes 185.9529031% after 1:1 greedy matching.
+        and this becomes 185.9561302% after 1:1 greedy matching.
 
 ### Using `bal.plot` from `cobalt`
 
@@ -693,9 +716,9 @@ dm2200_matched2 %>% count(subject, exposure)
      5 S-0010  B            1
      6 S-0014  B            1
      7 S-0017  A            2
-     8 S-0026  A            2
-     9 S-0027  A            2
-    10 S-0037  A            2
+     8 S-0020  B            1
+     9 S-0026  A            2
+    10 S-0027  A            2
     # ... with 590 more rows
 
 ## Checking Covariate Balance for our 1:2 Greedy Match
@@ -718,34 +741,34 @@ bal2
 
     Balance Measures
                         Type Diff.Un V.Ratio.Un Diff.Adj V.Ratio.Adj
-    age              Contin.  0.4076     1.3195   0.0468      1.2695
+    age              Contin.  0.4076     1.3195   0.0773      1.2896
     race_Asian        Binary  0.0025              0.0000            
-    race_Black_AA     Binary -0.2975             -0.0350            
+    race_Black_AA     Binary -0.2975             -0.0225            
     race_Other        Binary  0.0320              0.0000            
-    race_White        Binary  0.2630              0.0350            
-    hisp              Binary  0.0320              0.0075            
-    sex_M             Binary -0.2190             -0.0625            
-    insur_Commercial  Binary  0.2200             -0.0050            
-    insur_Medicaid    Binary -0.3745             -0.0275            
-    insur_Medicare    Binary  0.2715              0.0800            
-    insur_Uninsured   Binary -0.1170             -0.0475            
-    nincome          Contin.  0.5306     3.2086  -0.0216      1.3968
-    nhsgrad          Contin.  0.3958     0.9727   0.0084      1.0822
-    cleve             Binary -0.3505             -0.0175            
-    a1c              Contin. -0.0419     0.8190  -0.0206      0.8639
-    ldl              Contin.  0.0783     0.9012   0.0248      0.9436
-    visits           Contin. -0.6304     0.4602  -0.3288      0.7418
-    tobacco_Current   Binary -0.3175             -0.0975            
-    tobacco_Former    Binary  0.1575              0.0600            
-    tobacco_Never     Binary  0.1600              0.0375            
-    statin            Binary  0.0315             -0.0025            
-    ace_arb           Binary -0.0345             -0.0150            
-    betab             Binary  0.1255              0.0425            
-    depr_dx           Binary  0.1115              0.0425            
+    race_White        Binary  0.2630              0.0225            
+    hisp              Binary  0.0320              0.0050            
+    sex_M             Binary -0.2190             -0.0775            
+    insur_Commercial  Binary  0.2200             -0.0100            
+    insur_Medicaid    Binary -0.3745             -0.0450            
+    insur_Medicare    Binary  0.2715              0.0950            
+    insur_Uninsured   Binary -0.1170             -0.0400            
+    nincome          Contin.  0.5306     3.2086  -0.0084      1.3369
+    nhsgrad          Contin.  0.3958     0.9727   0.0134      1.0964
+    cleve             Binary -0.3505             -0.0150            
+    a1c              Contin. -0.0419     0.8190  -0.0416      0.8261
+    ldl              Contin.  0.0783     0.9012   0.0104      0.9261
+    visits           Contin. -0.6304     0.4602  -0.2965      0.7321
+    tobacco_Current   Binary -0.3175             -0.1100            
+    tobacco_Former    Binary  0.1575              0.0700            
+    tobacco_Never     Binary  0.1600              0.0400            
+    statin            Binary  0.0315              0.0075            
+    ace_arb           Binary -0.0345             -0.0125            
+    betab             Binary  0.1255              0.0400            
+    depr_dx           Binary  0.1115              0.0625            
     eyeex             Binary  0.0925              0.0450            
     pneumo            Binary  0.3030              0.1525            
-    ps               Contin. -2.9189     0.1576  -1.4656      0.3428
-    linps            Contin. -1.7842     1.3395  -0.4322      0.4094
+    ps               Contin. -2.9189     0.1576  -1.4655      0.3428
+    linps            Contin. -1.7842     1.3395  -0.4321      0.4092
     
     Sample sizes
                 A    B
@@ -938,11 +961,11 @@ dm2200_matched3 %>% filter(exposure == "B") %>%
 
 ``` 
   n n_n     percent
-  1 197 0.648026316
-  2  64 0.210526316
-  3  19 0.062500000
-  4   5 0.016447368
-  5   5 0.016447368
+  1 200 0.657894737
+  2  57 0.187500000
+  3  23 0.075657895
+  4   6 0.019736842
+  5   4 0.013157895
   6   2 0.006578947
   7   1 0.003289474
   8   1 0.003289474
@@ -975,41 +998,41 @@ bal3
 
     Balance Measures
                         Type Diff.Un V.Ratio.Un Diff.Adj V.Ratio.Adj
-    age              Contin.  0.4076     1.3195  -0.0877      1.3329
-    race_Asian        Binary  0.0025              0.0000            
-    race_Black_AA     Binary -0.2975              0.0167            
-    race_Other        Binary  0.0320              0.0000            
-    race_White        Binary  0.2630             -0.0167            
-    hisp              Binary  0.0320             -0.0017            
-    sex_M             Binary -0.2190              0.0083            
-    insur_Commercial  Binary  0.2200              0.0000            
-    insur_Medicaid    Binary -0.3745             -0.0250            
-    insur_Medicare    Binary  0.2715              0.0167            
-    insur_Uninsured   Binary -0.1170              0.0083            
-    nincome          Contin.  0.5306     3.2086   0.0614      1.3866
-    nhsgrad          Contin.  0.3958     0.9727   0.0203      0.8155
-    cleve             Binary -0.3505              0.0000            
-    a1c              Contin. -0.0419     0.8190  -0.0641      1.0224
-    ldl              Contin.  0.0783     0.9012   0.1173      1.0480
-    visits           Contin. -0.6304     0.4602  -0.0721      0.8558
-    tobacco_Current   Binary -0.3175              0.0000            
-    tobacco_Former    Binary  0.1575              0.0333            
-    tobacco_Never     Binary  0.1600             -0.0333            
+    age              Contin.  0.4076     1.3195  -0.0695      1.3448
+    race_Asian        Binary  0.0025             -0.0033            
+    race_Black_AA     Binary -0.2975              0.0233            
+    race_Other        Binary  0.0320             -0.0017            
+    race_White        Binary  0.2630             -0.0183            
+    hisp              Binary  0.0320             -0.0067            
+    sex_M             Binary -0.2190              0.0067            
+    insur_Commercial  Binary  0.2200             -0.0083            
+    insur_Medicaid    Binary -0.3745             -0.0317            
+    insur_Medicare    Binary  0.2715              0.0250            
+    insur_Uninsured   Binary -0.1170              0.0150            
+    nincome          Contin.  0.5306     3.2086   0.0165      1.3475
+    nhsgrad          Contin.  0.3958     0.9727  -0.0541      0.8348
+    cleve             Binary -0.3505              0.0067            
+    a1c              Contin. -0.0419     0.8190  -0.0619      1.0048
+    ldl              Contin.  0.0783     0.9012   0.0955      1.0295
+    visits           Contin. -0.6304     0.4602  -0.0984      0.8184
+    tobacco_Current   Binary -0.3175             -0.0267            
+    tobacco_Former    Binary  0.1575              0.0533            
+    tobacco_Never     Binary  0.1600             -0.0267            
     statin            Binary  0.0315             -0.0250            
-    ace_arb           Binary -0.0345              0.0033            
-    betab             Binary  0.1255             -0.0317            
-    depr_dx           Binary  0.1115              0.0100            
-    eyeex             Binary  0.0925             -0.0017            
-    pneumo            Binary  0.3030              0.0017            
-    ps               Contin. -2.9189     0.1576  -0.0385      0.9512
-    linps            Contin. -1.7842     1.3395  -0.0267      0.8892
+    ace_arb           Binary -0.0345             -0.0050            
+    betab             Binary  0.1255             -0.0283            
+    depr_dx           Binary  0.1115              0.0117            
+    eyeex             Binary  0.0925              0.0133            
+    pneumo            Binary  0.3030             -0.0083            
+    ps               Contin. -2.9189     0.1576  -0.0383      0.9511
+    linps            Contin. -1.7842     1.3395  -0.0267      0.8893
     
     Sample sizes
-                           A       B
-    All                  200 2000.00
-    Matched (ESS)        200  104.53
-    Matched (Unweighted) 200  304.00
-    Unmatched              0 1696.00
+                           A        B
+    All                  200 2000.000
+    Matched (ESS)        200  104.469
+    Matched (Unweighted) 200  304.000
+    Unmatched              0 1696.000
 
 ### Checking Rubin’s Rules 1 and 2
 
@@ -1207,34 +1230,34 @@ bal4
 
     Balance Measures
                         Type Diff.Un V.Ratio.Un Diff.Adj V.Ratio.Adj
-    age              Contin.  0.4076     1.3195  -0.0327      1.1305
+    age              Contin.  0.4076     1.3195  -0.0188      1.2289
     race_Asian        Binary  0.0025             -0.0062            
-    race_Black_AA     Binary -0.2975              0.0247            
-    race_Other        Binary  0.0320              0.0000            
+    race_Black_AA     Binary -0.2975              0.0309            
+    race_Other        Binary  0.0320             -0.0062            
     race_White        Binary  0.2630             -0.0185            
     hisp              Binary  0.0320             -0.0123            
-    sex_M             Binary -0.2190              0.0000            
-    insur_Commercial  Binary  0.2200             -0.0247            
-    insur_Medicaid    Binary -0.3745              0.0370            
-    insur_Medicare    Binary  0.2715             -0.0185            
+    sex_M             Binary -0.2190              0.0185            
+    insur_Commercial  Binary  0.2200             -0.0123            
+    insur_Medicaid    Binary -0.3745              0.0309            
+    insur_Medicare    Binary  0.2715             -0.0247            
     insur_Uninsured   Binary -0.1170              0.0062            
-    nincome          Contin.  0.5306     3.2086   0.0006      1.4995
-    nhsgrad          Contin.  0.3958     0.9727  -0.0348      1.0895
-    cleve             Binary -0.3505             -0.0309            
-    a1c              Contin. -0.0419     0.8190  -0.0351      0.9023
-    ldl              Contin.  0.0783     0.9012  -0.0022      0.9701
-    visits           Contin. -0.6304     0.4602  -0.1388      1.1382
-    tobacco_Current   Binary -0.3175              0.0123            
+    nincome          Contin.  0.5306     3.2086  -0.0131      1.3250
+    nhsgrad          Contin.  0.3958     0.9727  -0.0729      1.0044
+    cleve             Binary -0.3505             -0.0247            
+    a1c              Contin. -0.0419     0.8190  -0.0752      0.8504
+    ldl              Contin.  0.0783     0.9012   0.0195      0.9686
+    visits           Contin. -0.6304     0.4602  -0.1770      0.8375
+    tobacco_Current   Binary -0.3175              0.0000            
     tobacco_Former    Binary  0.1575              0.0494            
-    tobacco_Never     Binary  0.1600             -0.0617            
-    statin            Binary  0.0315             -0.0309            
-    ace_arb           Binary -0.0345             -0.0123            
-    betab             Binary  0.1255              0.0123            
-    depr_dx           Binary  0.1115             -0.0370            
-    eyeex             Binary  0.0925              0.0247            
-    pneumo            Binary  0.3030              0.0123            
-    ps               Contin. -2.9189     0.1576  -0.0305      0.9598
-    linps            Contin. -1.7842     1.3395  -0.0071      0.9771
+    tobacco_Never     Binary  0.1600             -0.0494            
+    statin            Binary  0.0315              0.0062            
+    ace_arb           Binary -0.0345              0.0000            
+    betab             Binary  0.1255              0.0247            
+    depr_dx           Binary  0.1115             -0.0185            
+    eyeex             Binary  0.0925             -0.0062            
+    pneumo            Binary  0.3030              0.0062            
+    ps               Contin. -2.9189     0.1576  -0.0308      0.9598
+    linps            Contin. -1.7842     1.3395  -0.0072      0.9775
     
     Sample sizes
                 A    B
@@ -1332,12 +1355,22 @@ love.plot(bal4,
 
 ![](matching_with_dm2200_files/figure-gfm/unnamed-chunk-49-1.png)<!-- -->
 
+# Planned matches coming as soon as Dr. Love finishes them
+
+  - Nearest Neighbor Matching using the `MatchIt` package
+  - Optimal Matching using the `MatchIt` package
+  - Full Matching using the `MatchIt` package
+  - Genetic Matching using the `MatchIt` package
+  - Coarsened Exact Matching using the `MatchIt` package
+
 # Outcome Models
 
 We’ll fit two (overly simplistic) outcome models, one for `bp_good` (our
 binary outcome) and another for `bmi` (our quantitative outcome.) Later,
 we’ll compare the `exposure` effect estimates made here to the estimates
-we obtain after propensity matching.
+we obtain after propensity matching. In each case, we’ll focus on ATT
+estimates (average treated effect on the treated) rather than ATE
+estimates.
 
 ## Unadjusted Models prior to Propensity Matching
 
@@ -1391,7 +1424,7 @@ tidy(result_match1_bp, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95) 
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| exposure == “A”TRUE |     0.66 |     0.218 |    0.431 |     1.012 |
+| exposure == “A”TRUE |    0.583 |     0.213 |    0.384 |     0.885 |
 
 ### Quantitative Outcome: `bmi`
 
@@ -1427,8 +1460,8 @@ tidy(result_match1_bmi,
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| (Intercept)         |   35.169 |     0.609 |   33.975 |    36.362 |
-| exposure == “A”TRUE |  \-2.342 |     0.861 |  \-4.029 |   \-0.654 |
+| (Intercept)         |   34.888 |     0.618 |   33.678 |    36.098 |
+| exposure == “A”TRUE |  \-2.061 |     0.873 |  \-3.773 |   \-0.349 |
 
 ## Adjusted Outcome Models after `match2`
 
@@ -1446,7 +1479,7 @@ tidy(result_match2_bp, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95) 
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| exposure == “A”TRUE |    0.485 |     0.172 |    0.346 |      0.68 |
+| exposure == “A”TRUE |    0.423 |     0.178 |    0.298 |       0.6 |
 
 ### Quantitative Outcome: `bmi`
 
@@ -1478,8 +1511,8 @@ tidy(result_match2_bmi,
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| (Intercept)         |   34.945 |     0.464 |   34.035 |    35.855 |
-| exposure == “A”TRUE |  \-2.118 |     0.575 |  \-3.245 |   \-0.991 |
+| (Intercept)         |   34.829 |     0.461 |   33.925 |    35.734 |
+| exposure == “A”TRUE |  \-2.002 |     0.570 |  \-3.121 |   \-0.884 |
 
 ## Adjusted Outcome Models after `match3`
 
@@ -1497,7 +1530,7 @@ tidy(result_match3_bp, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95) 
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| exposure == “A”TRUE |    0.558 |     0.139 |    0.424 |     0.733 |
+| exposure == “A”TRUE |    0.616 |     0.135 |    0.473 |     0.804 |
 
 ### Quantitative Outcome: `bmi`
 
@@ -1529,8 +1562,8 @@ tidy(result_match3_bmi,
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| (Intercept)         |   34.611 |     0.421 |   33.786 |    35.437 |
-| exposure == “A”TRUE |  \-1.784 |     0.448 |  \-2.663 |   \-0.906 |
+| (Intercept)         |   34.937 |     0.420 |   34.113 |    35.761 |
+| exposure == “A”TRUE |  \-2.110 |     0.456 |  \-3.004 |   \-1.216 |
 
 ## Adjusted Outcome Models after `match4`
 
@@ -1548,7 +1581,7 @@ tidy(result_match4_bp, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95) 
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| exposure == “A”TRUE |    0.659 |     0.239 |    0.412 |     1.053 |
+| exposure == “A”TRUE |    0.622 |     0.241 |    0.388 |     0.997 |
 
 ### Quantitative Outcome: `bmi`
 
@@ -1563,7 +1596,11 @@ dm2200_matched4 <- dm2200_matched4 %>%
 result_match4_bmi <- lmer(bmi ~ (exposure == "A") + 
                               (1 | match4_matches_f), 
                           data = dm2200_matched4)
+```
 
+    boundary (singular) fit: see ?isSingular
+
+``` r
 tidy(result_match4_bmi, 
      conf.int = TRUE, conf.level = 0.95) %>% 
     filter(group == "fixed") %>%
@@ -1580,8 +1617,8 @@ tidy(result_match4_bmi,
 
 | term                | estimate | std.error | conf.low | conf.high |
 | :------------------ | -------: | --------: | -------: | --------: |
-| (Intercept)         |   35.065 |     0.690 |   33.712 |    36.418 |
-| exposure == “A”TRUE |  \-1.814 |     0.939 |  \-3.653 |     0.026 |
+| (Intercept)         |   34.741 |     0.669 |   33.429 |    36.052 |
+| exposure == “A”TRUE |  \-1.490 |     0.946 |  \-3.344 |     0.365 |
 
 # Cleanup
 
@@ -1609,9 +1646,9 @@ rm(bal1, bal2, bal3, bal4,
 
 # Key References
 
-Matching was performed using the Matching package (Sekhon, 2011), and
-covariate balance was assessed using cobalt (Greifer, 2020), both in R
-(R Core Team, 2019).
+Matching in these examples was performed using the Matching package
+(Sekhon, 2011), and covariate balance was assessed using cobalt
+(Greifer, 2020), both in R (R Core Team, 2019).
 
   - Greifer, N. (2020). cobalt: Covariate Balance Tables and Plots. R
     package version 4.0.0.

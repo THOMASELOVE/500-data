@@ -142,7 +142,7 @@ ggplot(dm2200, aes(x = exposure, y = linps)) +
 
 # `match_1` 1:1 greedy matching without replacement with the `Matching` package
 
-We're going to match on the linear propensity score, and define our `treat` (treatment) as occurring when `exposure` is A.
+We're going to match on the linear propensity score, and define our `treat` (treatment) as occurring when `exposure` is A. 
 
 ```{r}
 match_1 <- Match(Tr = dm2200$treat, X = dm2200$linps, 
@@ -152,9 +152,18 @@ match_1 <- Match(Tr = dm2200$treat, X = dm2200$linps,
 summary(match_1)
 ```
 
+## ATT vs. ATE vs. ATC estimates
+
+Note that in each of the matched samples we build, we'll focus on ATT estimates (average treated effect on the treated) rather than ATE estimates. This means that in our matching we're trying to mirror the population represented by the "treated" sample we observed.
+
+- To obtain ATE estimates rather than ATT with the `Match` function from the `Matching` package, use `estimand = "ATE"` in the process of developing the matched sample.
+- To obtain ATC estimates (average treatment effect on the controls), use `estimand = "ATC"`.
+
+I encourage the use of ATT estimates in your projects, where possible. I suggest also that you define the "treated" group (the one that the propensity score is estimating) to be the smaller of the two groups you have, to facilitate this approach. If you estimate ATE or ATC instead of ATT, of course, you are answering a different question than what ATT resolves.
+
 ## Obtaining the Matched Sample
 
-Now, we build a new matched sample data frame in order to do some of the analyses to come. This will contain only the matched subjects.
+Now, we build a new matched sample data frame in order to do some of the analyses to come. This will contain only the matched subjects. 
 
 ```{r}
 match1_matches <- factor(rep(match_1$index.treated, 2))
@@ -710,10 +719,17 @@ love.plot(bal4,
           title = "Variance Ratios for our 1:1 Caliper Match") 
 ```
 
+# Planned matches coming as soon as Dr. Love finishes them
+
+- Nearest Neighbor Matching using the `MatchIt` package
+- Optimal Matching using the `MatchIt` package
+- Full Matching using the `MatchIt` package
+- Genetic Matching using the `MatchIt` package
+- Coarsened Exact Matching using the `MatchIt` package
 
 # Outcome Models
 
-We'll fit two (overly simplistic) outcome models, one for `bp_good` (our binary outcome) and another for `bmi` (our quantitative outcome.) Later, we'll compare the `exposure` effect estimates made here to the estimates we obtain after propensity matching.
+We'll fit two (overly simplistic) outcome models, one for `bp_good` (our binary outcome) and another for `bmi` (our quantitative outcome.) Later, we'll compare the `exposure` effect estimates made here to the estimates we obtain after propensity matching. In each case, we'll focus on ATT estimates (average treated effect on the treated) rather than ATE estimates.
 
 ## Unadjusted Models prior to Propensity Matching
 
@@ -900,10 +916,9 @@ rm(bal1, bal2, bal3, bal4,
    match1_matches, match2_matches, match3_matches)
 ```
 
-
 # Key References
 
-Matching was performed using the Matching package (Sekhon, 2011), and covariate balance was assessed using cobalt (Greifer, 2020), both in R (R Core Team, 2019).
+Matching in these examples was performed using the Matching package (Sekhon, 2011), and covariate balance was assessed using cobalt (Greifer, 2020), both in R (R Core Team, 2019).
 
 - Greifer, N. (2020). cobalt: Covariate Balance Tables and Plots. R package version 4.0.0.
 - Sekhon, J.S. (2011) Multivariate and Propensity Score Matching Software with Automated Balance Optimization: The Matching Package for R, *J of Statistical Software*, 2011, 42: 7, http://www.jstatsoft.org/. R package version 4.9-6.
