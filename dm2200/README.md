@@ -16,4 +16,12 @@ The purpose of this (simulated) example is to demonstrate a range of propensity 
     3. 1:3 matching with replacement
     4. 1:1 matching without replacement but with a caliper on the propensity score
 
+## Other approaches coming before the end of the semester...
+
+- Using the `MatchIt` package
+    5. Nearest Neighbor Matching
+    6. Optimal Matching
+    7. Full Matching
+    8. Genetic Matching
+    9. Coarsened Exact Matching 
 
