@@ -19,9 +19,9 @@ The purpose of this (simulated) example is to demonstrate a range of propensity 
 ## Other approaches coming before the end of the semester...
 
 - Using the `MatchIt` package
-    5. Nearest Neighbor Matching
-    6. Optimal Matching
-    7. Full Matching
-    8. Genetic Matching
-    9. Coarsened Exact Matching 
+    1. Nearest Neighbor Matching
+    2. Optimal Matching
+    3. Full Matching
+    4. Genetic Matching
+    5. Coarsened Exact Matching 
 
