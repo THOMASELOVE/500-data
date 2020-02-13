@@ -7,5 +7,6 @@ The `lindner` data come from an observational study of 996 patients receiving an
 - The latest [PDF version is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner.pdf).
 - The latest [Github Markdown version (with code and results) is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner.md).
 - The latest [R Markdown version (code only) is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner.Rmd).
+- An [HTML version is now available on RPubs](https://rpubs.com/TELOVE/lindner-500).
 
 This is a relatively early draft. We'd very much like your help with improving it. Suggestions should be sent to **500-help at case dot edu**.
