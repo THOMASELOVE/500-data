@@ -6,6 +6,8 @@ Here is the [R Markdown file](https://github.com/THOMASELOVE/500-data/blob/maste
 
 Here is the [Github Markdown file](https://github.com/THOMASELOVE/500-data/blob/master/toy2020/toy2020_analysis.md) which displays the code and its results.
 
+I've also placed an [HTML version on RPubs](https://rpubs.com/TELOVE/toy2020-500) at https://rpubs.com/TELOVE/toy2020-500.
+
 The `toy.csv` data file, in [raw, downloadable form](https://raw.githubusercontent.com/THOMASELOVE/500-data/master/toy2020/data/toy2020.csv).
 
 - The Data Set is 100% fictional.
