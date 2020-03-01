@@ -3,6 +3,9 @@ title: "Propensity Matching and the dm2200 Data"
 author: "Thomas E. Love, Ph.D."
 date: "`r Sys.Date()`"
 output: 
+    html_document:
+        toc: TRUE
+        code_folding: show
     github_document:
         toc: TRUE
 ---
@@ -19,7 +22,7 @@ This document demonstrates multiple matching strategies incorporating the propen
 library(skimr); library(tableone)
 library(magrittr); library(janitor) 
 library(broom); library(survival); library(lme4)
-library(cobalt); library(Matching)
+library(cobalt); library(Matching); library(MatchIt)
 library(tidyverse)
 
 theme_set(theme_bw())
@@ -719,9 +722,621 @@ love.plot(bal4,
           title = "Variance Ratios for our 1:1 Caliper Match") 
 ```
 
+
+# `match_5` 1:1 Nearest Neighbor Matching with `Matchit` 
+
+The `MatchIt` package implements the suggestions of Ho, Imai, King, and Stuart (2007) for improving parametric statistical models by preprocessing data with nonparametric matching methods. Read more about `MatchIt` at https://gking.harvard.edu/matchit. 
+
+With `MatchIt`, the matching is done using the `matchit(treat ~ X, ...)` function, where `treat` is the vector of treatment assignments and `X` are the covariates to be used in the matching. 
+
+We'll start our exploration of the `MatchIt` approach to developing matches with nearest neighbor matching, which (quoting the `MatchIt` manual...)
+
+> ... selects the *r* (default = 1, specified by the `ratio` option) best control matches for each individual in the treated group, using a distance measure specified by the `distance` option (default = logit). Matches are chosen for each treated unit one at a time, with the order specified by the `m.order` command (default=largest to smallest). At each matching step we choose the control unit that is not yet matched but is closest to the treated unit on the distance measure.  
+
+The full syntax (with default choices indicated) is 
+
+```
+matchit(formula, data=NULL, discard=0, exact=FALSE, 
+         replace=FALSE, ratio=1, model="logit", 
+         reestimate=FALSE, nearest=TRUE, m.order=2, 
+         caliper=0, calclosest=FALSE, mahvars=NULL, 
+         subclass=0, sub.by="treat", counter=TRUE, 
+         full=FALSE, full.options=list(), ...)
+```
+
+Here, we'll match on the linear propensity score (by specifying the `distance` to use the logistic link with the linear propensity score via `"linear.logit"`), and we'll perform 1:1 nearest neighbor matching without replacement using the default ordering (largest to smallest). Since we've already seen that greedy 1:1 matching without replacement doesn't work well in this setting, we're not expecting a strong result in terms of balance here, either.
+
+```{r}
+dm2200 <- dm2200 %>%
+    mutate(treat = as.logical(exposure == "A"))
+
+covs_1 <- dm2200 %>%
+    select(age, race, hisp, sex, insur, nincome,
+           nhsgrad, cleve, a1c, ldl, visits, tobacco,
+           statin, ace_arb, betab, depr_dx, eyeex, pneumo)
+
+match_5 <- matchit(f.build("treat", covs_1), data = dm2200,
+                   distance = "linear.logit", method = "nearest", 
+                   ratio = 1, replace = FALSE)
+
+match_5
+```
+
+
+## Obtaining the Matched Sample
+
+There is just one tricky part to doing this in `MatchIt`. The main work can be done with a very simple command.
+
+```{r}
+dm2200_matched5 <- match.data(match_5)
+```
+
+This leaves only the job of creating a matching number, for which we have to develop some additional R code.
+
+```{r}
+# Thanks to Robert McDonald at Mayo
+# https://lists.gking.harvard.edu/pipermail/matchit/2012-April/000458.html
+
+len <- dim(dm2200)[1]
+matchx <- rep(NA,len)
+len2 <- length(match_5$match.matrix)
+count <- 1
+for(i in 1:len2){
+	
+	match1 <- match_5$match.matrix[i]
+	match2 <- row.names(match_5$match.matrix)[i]
+	
+	if(!is.na(match1)){
+	matchx[as.numeric(match1)] <- count
+	matchx[as.numeric(match2)] <- count
+	count <- count+1}
+	
+}
+
+dm2200_matched5 <- dm2200_matched5 %>%
+    mutate(match5_matches = 
+               matchx[as.numeric
+                      (row.names(dm2200_matched5))]) %>%
+    mutate(match5_matches = factor(match5_matches))
+```
+
+How many unique subjects are in our matched sample?
+
+```{r}
+dm2200_matched5 %$% n_distinct(subject)
+```
+
+This match includes 200 pairs so 400 subjects, as we've done matching without replacement.
+
+```{r}
+dm2200_matched5 %>% count(exposure)
+```
+
+Do we have as many matching numbers as treated subjects?
+
+```{r}
+dm2200_matched5 %$% n_distinct(match5_matches)
+```
+
+## Checking Covariate Balance for our 1:1 Nearest Neighbor Match
+
+### Default Numerical Balance Summary from `MatchIt`
+
+```{r}
+summary(match_5)
+```
+
+### Using `bal.tab` to obtain a balance table
+
+```{r}
+bal5 <- bal.tab(match_5, un = TRUE, disp.v.ratio = TRUE)
+
+bal5
+```
+
+### Checking Rubin's Rules 1 and 2
+
+We'll build a little table of the Rubin's Rules (1 and 2) results before and after `match_5` is applied.
+
+```{r}
+rubin_report_m5 <- tibble(
+    status = c("Rule1", "Rule2"),
+    Unmatched = c(bal5$Balance$Diff.Un[1],
+                  bal5$Balance$V.Ratio.Un[1]),
+    Match5 = c(bal5$Balance$Diff.Adj[1],
+               bal5$Balance$V.Ratio.Adj[1]))
+
+rubin_report_m5 %>% knitr::kable(digits = 2)
+```
+
+- As we'd expect based on our previous greedy 1:1 match, this isn't great sufficiently strong balance.
+
+### Using `bal.plot` from `cobalt`
+
+Looking at the linear propensity scores in each group, in mirrored histograms, we have ...
+
+```{r}
+bal.plot(obj = match_5,
+         var.name = "distance", 
+         which = "both",
+         sample.names = 
+             c("Unmatched Sample", "match_5 Sample"),
+         type = "histogram", mirror = TRUE)
+```
+
+### Using `love.plot` to look at Standardized Differences
+
+```{r}
+love.plot(bal5, 
+          threshold = .1, size = 3,
+          var.order = "unadjusted",
+          stats = "mean.diffs",
+          stars = "raw",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Love Plot for our 1:1 Nearest Neighbor Match") +
+    labs(subtitle = "distance = linear propensity score",
+         caption = "* indicates raw mean differences (for binary variables)")
+```
+
+### Using `love.plot` to look at Variance Ratios
+
+Again, the categorical variables are dropped.
+
+```{r}
+love.plot(bal5, 
+          threshold = .5, size = 3,
+          stats = "variance.ratios",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Variance Ratios for our 1:1 Nearest Neighbor Match") +
+    labs(subtitle = "distance = linear propensity score",
+         caption = "* indicates raw mean differences (for binary variables)")
+```
+
+# `match_6` 1:1 Nearest Neighbor Caliper Matching with `Matchit` 
+
+As in `match_5`, we'll match on the linear propensity score (by specifying the `distance` to use the logistic link with the linear propensity score via `"linear.logit"`), and we'll perform 1:1 nearest neighbor matching without replacement using the default ordering (largest to smallest), but we'll add a some arguments to build a specific kind caliper match. Specifically, we'll require our matches to be within 0.25 standard deviations of each other on the linear propensity score.
+
+```{r}
+match_6 <- matchit(f.build("treat", covs_1), data = dm2200,
+                   distance = "linear.logit", 
+                   method = "nearest", caliper = 0.25,
+                   ratio = 1, replace = FALSE)
+
+match_6
+```
+
+
+## Obtaining the Matched Sample
+
+There is just one tricky part to doing this in `MatchIt`. The main work can be done with a very simple command.
+
+```{r}
+dm2200_matched6 <- match.data(match_6)
+```
+
+This leaves only the job of creating a matching number, for which we have to develop some additional R code.
+
+```{r}
+# Thanks to Robert McDonald at Mayo
+# https://lists.gking.harvard.edu/pipermail/matchit/2012-April/000458.html
+
+len <- dim(dm2200)[1]
+matchx <- rep(NA,len)
+len2 <- length(match_6$match.matrix)
+count <- 1
+for(i in 1:len2){
+	
+	match1 <- match_6$match.matrix[i]
+	match2 <- row.names(match_6$match.matrix)[i]
+	
+	if(!is.na(match1)){
+	matchx[as.numeric(match1)] <- count
+	matchx[as.numeric(match2)] <- count
+	count <- count+1}
+	
+}
+
+dm2200_matched6 <- dm2200_matched6 %>%
+    mutate(match6_matches = 
+               matchx[as.numeric
+                      (row.names(dm2200_matched6))]) %>%
+    mutate(match6_matches = factor(match6_matches))
+```
+
+How many unique subjects are in our matched sample?
+
+```{r}
+dm2200_matched6 %$% n_distinct(subject)
+```
+
+This match includes 172 pairs so 344 subjects, as we've done matching without replacement.
+
+```{r}
+dm2200_matched6 %>% count(exposure)
+```
+
+Do we have as many matching numbers as treated subjects?
+
+```{r}
+dm2200_matched6 %$% n_distinct(match6_matches)
+```
+
+## Checking Covariate Balance for our 1:1 Nearest Neighbor Caliper Match
+
+### Using `bal.tab` to obtain a balance table
+
+```{r}
+bal6 <- bal.tab(match_6, un = TRUE, disp.v.ratio = TRUE)
+
+bal6
+```
+
+### Checking Rubin's Rules 1 and 2
+
+We'll build a little table of the Rubin's Rules (1 and 2) results before and after `match_6` is applied, and compare these to the `match_5` results.
+
+```{r}
+rubin_report_m56 <- tibble(
+    status = c("Rule1", "Rule2"),
+    Unmatched = c(bal6$Balance$Diff.Un[1],
+                  bal6$Balance$V.Ratio.Un[1]),
+    Match5 = c(bal5$Balance$Diff.Adj[1],
+               bal5$Balance$V.Ratio.Adj[1]),
+    Match6 = c(bal6$Balance$Diff.Adj[1],
+               bal6$Balance$V.Ratio.Adj[1])
+    )
+
+rubin_report_m56 %>% knitr::kable(digits = 2)
+```
+
+- So the caliper appears to help quite a bit to improve the results that we saw in 1:1 nearest neighbor matching without replacement, at the cost of not including 28 of the treated subjects in the match.
+
+### Using `bal.plot` from `cobalt`
+
+Looking at the linear propensity scores in each group, in mirrored histograms, we have ...
+
+```{r}
+bal.plot(obj = match_6,
+         var.name = "distance", 
+         which = "both",
+         sample.names = 
+             c("Unmatched Sample", "match_6 Sample"),
+         type = "histogram", mirror = TRUE)
+```
+
+### Using `love.plot` to look at Standardized Differences
+
+```{r}
+love.plot(bal6, 
+          threshold = .1, size = 3,
+          var.order = "unadjusted",
+          stats = "mean.diffs",
+          stars = "raw",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Love Plot for 1:1 Nearest Neighbor Caliper Match") +
+    labs(subtitle = "distance = linear propensity score",
+         caption = "* indicates raw mean differences (for binary variables)")
+```
+
+### Using `love.plot` to look at Variance Ratios
+
+Again, the categorical variables are dropped.
+
+```{r}
+love.plot(bal6, 
+          threshold = .5, size = 3,
+          stats = "variance.ratios",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Variance Ratios for 1:1 Nearest Neighbor Caliper Match") +
+    labs(subtitle = "distance = linear propensity score",
+         caption = "* indicates raw mean differences (for binary variables)")
+```
+
+# `match_7` 1:1 Optimal Matching with `Matchit` 
+
+As in `match_5`, we'll match on the linear propensity score (by specifying the `distance` to use the logistic link with the linear propensity score via `"linear.logit"`), but now we'll use an optimal 1:1 matching without replacement.
+
+```{r}
+match_7 <- matchit(f.build("treat", covs_1), data = dm2200,
+                   distance = "linear.logit", 
+                   method = "optimal", 
+                   ratio = 1, replace = FALSE)
+
+match_7
+```
+
+
+## Obtaining the Matched Sample
+
+As before, much of the work can be done with `match.data`.
+
+```{r}
+dm2200_matched7 <- match.data(match_7)
+```
+
+This leaves only the job of creating a matching number, for which we have to develop some additional R code.
+
+```{r}
+# Thanks to Robert McDonald at Mayo
+# https://lists.gking.harvard.edu/pipermail/matchit/2012-April/000458.html
+
+len <- dim(dm2200)[1]
+matchx <- rep(NA,len)
+len2 <- length(match_7$match.matrix)
+count <- 1
+for(i in 1:len2){
+	
+	match1 <- match_7$match.matrix[i]
+	match2 <- row.names(match_7$match.matrix)[i]
+	
+	if(!is.na(match1)){
+	matchx[as.numeric(match1)] <- count
+	matchx[as.numeric(match2)] <- count
+	count <- count+1}
+	
+}
+
+dm2200_matched7 <- dm2200_matched7 %>%
+    mutate(match7_matches = 
+               matchx[as.numeric
+                      (row.names(dm2200_matched7))]) %>%
+    mutate(match7_matches = factor(match7_matches))
+```
+
+How many unique subjects are in our matched sample?
+
+```{r}
+dm2200_matched7 %$% n_distinct(subject)
+```
+
+This match includes 200 pairs so 400 subjects, as we've done matching without replacement.
+
+```{r}
+dm2200_matched7 %>% count(exposure)
+```
+
+Do we have as many matching numbers as treated subjects?
+
+```{r}
+dm2200_matched7 %$% n_distinct(match7_matches)
+```
+
+## Checking Covariate Balance for our 1:1 Optimal Match
+
+### Using `bal.tab` to obtain a balance table
+
+```{r}
+bal7 <- bal.tab(match_7, un = TRUE, disp.v.ratio = TRUE)
+
+bal7
+```
+
+### Checking Rubin's Rules 1 and 2
+
+We'll build a little table of the Rubin's Rules (1 and 2) results before and after `match_6` is applied, and compare these to the `match_5` results.
+
+```{r}
+rubin_report_m567 <- tibble(
+    status = c("Rule1", "Rule2"),
+    Unmatched = c(bal6$Balance$Diff.Un[1],
+                  bal6$Balance$V.Ratio.Un[1]),
+    Match5 = c(bal5$Balance$Diff.Adj[1],
+               bal5$Balance$V.Ratio.Adj[1]),
+    Match6 = c(bal6$Balance$Diff.Adj[1],
+               bal6$Balance$V.Ratio.Adj[1]),
+    Match7 = c(bal7$Balance$Diff.Adj[1],
+               bal7$Balance$V.Ratio.Adj[1])
+    )
+
+rubin_report_m567 %>% knitr::kable(digits = 2)
+```
+
+- We note here that the optimal matching here does very little, if anything, to improved on the nearest neighbor match.
+
+### Are the Optimal and Nearest Neighbor Matches the Same?
+
+```{r}
+m5_subs <- dm2200_matched5 %>% select(subject)
+m7_subs <- dm2200_matched7 %>% select(subject)
+
+all_equal(m5_subs, m7_subs)
+```
+
+Apparently not, but they are very similar.
+
+### Using `bal.plot` from `cobalt`
+
+Looking at the linear propensity scores in each group, in mirrored histograms, we have ...
+
+```{r}
+bal.plot(obj = match_7,
+         var.name = "distance", 
+         which = "both",
+         sample.names = 
+             c("Unmatched Sample", "match_7 Sample"),
+         type = "histogram", mirror = TRUE)
+```
+
+### Using `love.plot` to look at Standardized Differences
+
+```{r}
+love.plot(bal7, 
+          threshold = .1, size = 3,
+          var.order = "unadjusted",
+          stats = "mean.diffs",
+          stars = "raw",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Love Plot for 1:1 Optimal Match") +
+    labs(subtitle = "distance = linear propensity score",
+         caption = "* indicates raw mean differences (for binary variables)")
+```
+
+### Using `love.plot` to look at Variance Ratios
+
+Again, the categorical variables are dropped.
+
+```{r}
+love.plot(bal7, 
+          threshold = .5, size = 3,
+          stats = "variance.ratios",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Variance Ratios for 1:1 Optimal Match") +
+    labs(subtitle = "distance = linear propensity score",
+         caption = "* indicates raw mean differences (for binary variables)")
+```
+
+
+# `match_8` 1:2 Optimal Matching with `Matchit` 
+
+Again, we'll match on the linear propensity score (by specifying the `distance` to use the logistic link with the linear propensity score via `"linear.logit"`), but now we'll perform 1:2 (so `ratio = 2`) optimal (so `method = "optimal") matching without replacement using the default ordering (largest to smallest).
+
+```{r}
+match_8 <- matchit(f.build("treat", covs_1), data = dm2200,
+                   distance = "linear.logit", 
+                   method = "optimal", ratio = 2, 
+                   replace = FALSE)
+
+match_8
+```
+
+
+## Obtaining the Matched Sample
+
+As before, much of the work can be done with a very simple command.
+
+```{r}
+dm2200_matched8 <- match.data(match_8)
+```
+
+This leaves only the job of creating a matching number, for which we have to develop some additional R code, and this needs some modification because we now have two matched controls for each treated subject.
+
+```{r}
+# Thanks to Robert McDonald at Mayo
+# https://lists.gking.harvard.edu/pipermail/matchit/2012-April/000458.html
+
+mm1 <- match_8$match.matrix[,1]
+mm2 <- match_8$match.matrix[,2]
+
+len <- dim(dm2200)[1]
+matchx <- rep(NA,len)
+len2 <- length(match_8$match.matrix)
+count <- 1
+for(i in 1:len2){
+	
+	match_tr <- row.names(match_8$match.matrix)[i]
+	match_con1 <- mm1[i]
+	match_con2 <- mm2[i]
+	
+	if(!is.na(match_tr) & !is.na(match_con1) & !is.na(match_con2)){
+	matchx[as.numeric(match_con1)] <- count
+	matchx[as.numeric(match_con2)] <- count
+	matchx[as.numeric(match_tr)] <- count
+	count <- count+1}
+	
+}
+
+dm2200_matched8 <- dm2200_matched8 %>%
+     mutate(match8_matches = 
+            matchx[as.numeric(row.names(dm2200_matched8))]) 
+```
+
+
+How many unique subjects are in our matched sample?
+
+```{r}
+dm2200_matched8 %$% n_distinct(subject)
+```
+
+This match includes 200 triplets (1 treated and 2 control) so 600 subjects, and again we've done matching without replacement.
+
+```{r}
+dm2200_matched8 %>% count(exposure)
+```
+
+Do we have as many matching numbers as treated subjects?
+
+```{r}
+dm2200_matched8 %$% n_distinct(match8_matches)
+```
+
+## Checking Covariate Balance for our 1:2 Optimal Match
+
+### Using `bal.tab` to obtain a balance table
+
+```{r}
+bal8 <- bal.tab(match_8, un = TRUE, disp.v.ratio = TRUE)
+
+bal8
+```
+
+### Checking Rubin's Rules 1 and 2
+
+We'll build a little table of the Rubin's Rules (1 and 2) results before and after `match_8` is applied, and compare these to the other `MatchIt` results we've developed.
+
+```{r}
+rubin_report_m5678 <- tibble(
+    status = c("Rule1", "Rule2"),
+    Unmatched = c(bal8$Balance$Diff.Un[1],
+                  bal8$Balance$V.Ratio.Un[1]),
+    Match5 = c(bal5$Balance$Diff.Adj[1],
+               bal5$Balance$V.Ratio.Adj[1]),
+    Match6 = c(bal6$Balance$Diff.Adj[1],
+               bal6$Balance$V.Ratio.Adj[1]),
+    Match7 = c(bal7$Balance$Diff.Adj[1],
+               bal7$Balance$V.Ratio.Adj[1]),
+    Match8 = c(bal8$Balance$Diff.Adj[1],
+               bal8$Balance$V.Ratio.Adj[1])
+    )
+
+rubin_report_m5678 %>% knitr::kable(digits = 2)
+```
+
+- So the optimal matching doesn't look very strong here. Of course, we're matching 1:2 in this situation.
+
+### Using `bal.plot` from `cobalt`
+
+Looking at the linear propensity scores in each group, in mirrored histograms, we have ...
+
+```{r}
+bal.plot(obj = match_8,
+         var.name = "distance", 
+         which = "both",
+         sample.names = 
+             c("Unmatched Sample", "match_8 Sample"),
+         type = "histogram", mirror = TRUE)
+```
+
+### Using `love.plot` to look at Standardized Differences
+
+```{r}
+love.plot(bal8, 
+          threshold = .1, size = 3,
+          var.order = "unadjusted",
+          stats = "mean.diffs",
+          stars = "raw",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Love Plot for 1:2 Optimal Match") +
+    labs(subtitle = "distance = linear propensity score",
+         caption = "* indicates raw mean differences (for binary variables)")
+```
+
+### Using `love.plot` to look at Variance Ratios
+
+Again, the categorical variables are dropped.
+
+```{r}
+love.plot(bal8, 
+          threshold = .5, size = 3,
+          stats = "variance.ratios",
+          sample.names = c("Unmatched", "Matched"),
+          title = "Variance Ratios for 1:2 Optimal Match") +
+    labs(subtitle = "distance = linear propensity score",
+         caption = "* indicates raw mean differences (for binary variables)")
+```
+
+
 # Planned matches coming as soon as Dr. Love finishes them
 
-- Nearest Neighbor Matching using the `MatchIt` package
 - Optimal Matching using the `MatchIt` package
 - Full Matching using the `MatchIt` package
 - Genetic Matching using the `MatchIt` package
@@ -893,6 +1508,134 @@ tidy(result_match4_bmi,
     knitr::kable(digits = 3)
 ```
 
+## Adjusted Outcome Models after `match5`
+
+### Binary Outcome: `bp_good`
+
+```{r}
+result_match5_bp <- clogit(bp_good ~ (exposure == "A") + 
+                          strata(match5_matches),
+                      data = dm2200_matched5)
+
+tidy(result_match5_bp, exponentiate = TRUE, 
+     conf.int = TRUE, conf.level = 0.95) %>%
+    select(term, estimate, std.error, conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+### Quantitative Outcome: `bmi`
+
+We'll use a mixed model to account for our 1:1 matching. The matches here are treated as a random factor, with the exposure a fixed factor, in the `lme4` package.
+
+```{r}
+result_match5_bmi <- lmer(bmi ~ (exposure == "A") + 
+                              (1 | match5_matches), 
+                          data = dm2200_matched5)
+
+tidy(result_match5_bmi, 
+     conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(group == "fixed") %>%
+    select(term, estimate, std.error, 
+           conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+## Adjusted Outcome Models after `match6`
+
+### Binary Outcome: `bp_good`
+
+```{r}
+result_match6_bp <- clogit(bp_good ~ (exposure == "A") + 
+                          strata(match6_matches),
+                      data = dm2200_matched6)
+
+tidy(result_match6_bp, exponentiate = TRUE, 
+     conf.int = TRUE, conf.level = 0.95) %>%
+    select(term, estimate, std.error, conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+### Quantitative Outcome: `bmi`
+
+We'll use a mixed model to account for our 1:1 matching. The matches here are treated as a random factor, with the exposure a fixed factor, in the `lme4` package.
+
+```{r}
+result_match6_bmi <- lmer(bmi ~ (exposure == "A") + 
+                              (1 | match6_matches), 
+                          data = dm2200_matched6)
+
+tidy(result_match6_bmi, 
+     conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(group == "fixed") %>%
+    select(term, estimate, std.error, 
+           conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+## Adjusted Outcome Models after `match7`
+
+### Binary Outcome: `bp_good`
+
+```{r}
+result_match7_bp <- clogit(bp_good ~ (exposure == "A") + 
+                          strata(match7_matches),
+                      data = dm2200_matched7)
+
+tidy(result_match7_bp, exponentiate = TRUE, 
+     conf.int = TRUE, conf.level = 0.95) %>%
+    select(term, estimate, std.error, conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+### Quantitative Outcome: `bmi`
+
+We'll use a mixed model to account for our 1:1 matching. The matches here are treated as a random factor, with the exposure a fixed factor, in the `lme4` package.
+
+```{r}
+result_match7_bmi <- lmer(bmi ~ (exposure == "A") + 
+                              (1 | match7_matches), 
+                          data = dm2200_matched7)
+
+tidy(result_match7_bmi, 
+     conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(group == "fixed") %>%
+    select(term, estimate, std.error, 
+           conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+## Adjusted Outcome Models after `match8`
+
+### Binary Outcome: `bp_good`
+
+```{r}
+result_match8_bp <- clogit(bp_good ~ (exposure == "A") + 
+                          strata(match8_matches),
+                      data = dm2200_matched8)
+
+tidy(result_match8_bp, exponentiate = TRUE, 
+     conf.int = TRUE, conf.level = 0.95) %>%
+    select(term, estimate, std.error, conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
+### Quantitative Outcome: `bmi`
+
+We'll use a mixed model to account for our 1:1 matching. The matches here are treated as a random factor, with the exposure a fixed factor, in the `lme4` package.
+
+```{r}
+result_match8_bmi <- lmer(bmi ~ (exposure == "A") + 
+                              (1 | match8_matches), 
+                          data = dm2200_matched8)
+
+tidy(result_match8_bmi, 
+     conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(group == "fixed") %>%
+    select(term, estimate, std.error, 
+           conf.low, conf.high) %>%
+    knitr::kable(digits = 3)
+```
+
 # Cleanup
 
 We've created a lot of variables here that we don't actually need going forward. So I'll remove them here:
@@ -909,11 +1652,21 @@ rm(bal1, bal2, bal3, bal4,
    result_match4_bmi,
    result_match1_bp, result_match2_bp, result_match3_bp,
    result_match4_bp,
-   rubin_m1, rubin_m2, rubin_m3,
+   rubin_m1, rubin_m2, rubin_m3, rubin_m4,
    rubin_report_m1, rubin_report_m12, rubin_report_m123,
-   rubin_report_m1234,
+   rubin_report_m1234, rubin_report_m5, 
+   rubin_report_m56, rubin_report_m567, rubin_report_m5678, 
    t1, unadj_mod1, unadj_mod2,
-   match1_matches, match2_matches, match3_matches)
+   match1_matches, match2_matches, match3_matches,
+   count, i, len, len2, match_con1, match_con2, match_tr,
+   match1, match2, match4_matches, matchx, mm1, mm2, 
+   bal5, bal6, bal7, bal8, dm2200_matched5, 
+   dm2200_matched6, dm2200_matched7, dm2200_matched8,
+   m5_subs, m7_subs, match_5, match_6, match_7, match_8,
+   result_match5_bmi, result_match6_bmi, result_match7_bmi,
+   result_match8_bmi,
+   result_match5_bp, result_match6_bp, result_match7_bp,
+   result_match8_bp)
 ```
 
 # Key References
