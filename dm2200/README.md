@@ -17,13 +17,16 @@ The purpose of this (simulated) example is to demonstrate a range of propensity 
     2. 1:2 matching without replacement
     3. 1:3 matching with replacement
     4. 1:1 matching without replacement but with a caliper on the propensity score
+- Using the `MatchIt` package
+    5. 1:1 nearest neighbor matching without replacement
+    6. 1:1 nearest neighbor caliper matching
+    7. 1:1 optimal matching without replacement
+    8. 1:2 optimal matching without replacement
 
-## Other approaches coming before the end of the semester...
+## Other approaches that *may* appear before the end of the semester...
 
 - Using the `MatchIt` package
-    1. Nearest Neighbor Matching
-    2. Optimal Matching
-    3. Full Matching
-    4. Genetic Matching
-    5. Coarsened Exact Matching 
+    1. Full Matching
+    2. Genetic Matching
+    3. Coarsened Exact Matching 
 
