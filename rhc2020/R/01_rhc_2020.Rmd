@@ -3,12 +3,12 @@ title: "Some Propensity Ideas and the Right Heart Catheterization Data"
 author: "Thomas E. Love, Ph.D."
 date: "`r Sys.Date()`"
 output: 
+    github_document:
+        toc: true
     html_document:
         toc: TRUE
         toc_float: TRUE
         number_sections: TRUE
-    github_document:
-        toc: true
 ---
 
 ```{r setup, include=FALSE}
@@ -985,7 +985,7 @@ None | `r round_half_up(rubin1.unadj,1)` | `r round_half_up(rubin2.unadj,2)` | -
 2 | `r round_half_up(rubin1.m2, 1)` | `r round_half_up(rubin2.m2, 2)` | Dreadful | 1,775 | 1:2 greedy w/o repl
 3 | `r round_half_up(rubin1.m3, 1)` | `r round_half_up(rubin2.m3, 2)` | Very Good | 2,184 | Genetic Search 1:1 w/o repl
 4 | `r round_half_up(rubin1.m4, 1)` | `r round_half_up(rubin2.m4, 2)` | Very Good | 2,184 | 1:1 greedy with repl
-5 | `r round_half_up(rubin1.m5, 1)` | `r round_half_up(rubin2.m5, 2)` | Very Good | 1,562 | 1:1 caliper with repl
+5 | `r round_half_up(rubin1.m5, 1)` | `r round_half_up(rubin2.m5, 2)` | Very Good | 1,562 | 1:1 caliper without repl
 6 | `r round_half_up(rubin1.m6, 1)` | `r round_half_up(rubin2.m6, 2)` | Very Good | 2,184 | 1:2 greedy with repl
 
 
