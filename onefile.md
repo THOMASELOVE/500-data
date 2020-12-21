@@ -2,10 +2,10 @@
 
 Below, we provide detailed steps for downloading such files ...
 
-1. using the [Safari browser on a Mac](https://github.com/THOMASELOVE/431-data/blob/master/README.md#using-safari-on-a-mac)
-2. using [Google Chrome on a Mac](https://github.com/THOMASELOVE/431-data/blob/master/README.md#using-a-mac-with-google-chrome)
-3. using [Google Chrome on a PC](https://github.com/THOMASELOVE/431-data/blob/master/README.md#using-a-pc-with-google-chrome)
-4. using [Microsoft Edge on a PC](https://github.com/THOMASELOVE/431-data/blob/master/README.md#using-microsoft-edge-on-a-pc)
+1. using the [Safari browser on a Mac](#using-safari-on-a-mac)
+2. using [Google Chrome on a Mac](#using-a-mac-with-google-chrome)
+3. using [Google Chrome on a PC](#using-a-pc-with-google-chrome)
+4. using [Microsoft Edge on a PC](#using-microsoft-edge-on-a-pc)
 
 ## Using Safari on a Mac
 
