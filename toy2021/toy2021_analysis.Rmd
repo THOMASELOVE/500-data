@@ -11,9 +11,6 @@ output:
       number_sections: TRUE
       code_folding: show
       code_download: TRUE
-  pdf_document:
-      toc: yes
-      number_sections: TRUE
 ---
 
 ## Setup
@@ -896,7 +893,7 @@ summary(adj.m.out2)
 
 The odds ratio in the `exp(coef)` section above is the average causal effect estimate - it describes the odds of having an event (`out2`) occur associated with being a treated subject, as compared to the odds of the event when a control subject. 
 
-I tidied this, as follows, without `conf.int = TRUE`, and got ...
+I tidied this, as follows, with `conf.int = TRUE`, and got ...
 
 ```{r}
 adj.m.out2_tidy <- tidy(adj.m.out2, exponentiate = TRUE,
@@ -1297,6 +1294,8 @@ adj.s.out3 <- coxph(Surv(out3.time, out2) ~ treated + strata(quintile), data=toy
 summary(adj.s.out3) ## exp(coef) gives relative hazard associated with treatment
 
 strat.result3 <- tidy(adj.s.out3, exponentiate = TRUE, conf.int = TRUE)
+
+strat.result3
 ```
 
 ### Checking the Proportional Hazards Assumption
@@ -1562,6 +1561,8 @@ toywt1.design <- svydesign(ids=~1, weights=~wts1, data=toy) # using ATT weights
 adjout1.wt1 <- svyglm(out1.cost ~ treated, design=toywt1.design)
 
 wt_att_results1 <- tidy(adjout1.wt1, conf.int = TRUE) %>% filter(term == "treated")
+
+wt_att_results1
 ```
 
 ### with ATE weights
@@ -1571,6 +1572,8 @@ toywt2.design <- svydesign(ids=~1, weights=~wts2, data=toy) # using ATE weights
 
 adjout1.wt2 <- svyglm(out1.cost ~ treated, design=toywt2.design)
 wt_ate_results1 <- tidy(adjout1.wt2, conf.int = TRUE) %>% filter(term == "treated")
+
+wt_ate_results1
 ```
 
 ### with TWANG ATT weights
@@ -1583,6 +1586,8 @@ toywt3.design <- svydesign(ids=~1,
 
 adjout1.wt3 <- svyglm(out1.cost ~ treated, design=toywt3.design)
 wt_twangatt_results1 <- tidy(adjout1.wt3, conf.int = TRUE) %>% filter(term == "treated")
+
+wt_twangatt_results1
 ```
 
 
@@ -1597,6 +1602,8 @@ adjout2.wt1 <- svyglm(out2 ~ treated, design=toywt1.design, family=quasibinomial
 
 wt_att_results2 <- tidy(adjout2.wt1, conf.int = TRUE, exponentiate = TRUE) %>% 
     filter(term == "treated")
+
+wt_att_results2
 ```
 
 ### Using ATE weights
@@ -1606,6 +1613,8 @@ adjout2.wt2 <- svyglm(out2.event ~ treated, design=toywt2.design, family=quasibi
 
 wt_ate_results2 <- tidy(adjout2.wt2, conf.int = TRUE, exponentiate = TRUE) %>% 
     filter(term == "treated")
+
+wt_ate_results2
 ```
 
 ### with TWANG ATT weights
@@ -1616,6 +1625,8 @@ adjout2.wt3 <- svyglm(out2 ~ treated, design=toywt3.design,
 
 wt_twangatt_results2 <- tidy(adjout2.wt3, conf.int = TRUE, exponentiate = TRUE) %>% 
     filter(term == "treated")
+
+wt_twangatt_results2
 ```
 
 ## ... on Outcome 3 [a time to event]
@@ -1630,6 +1641,8 @@ The Cox model comparing treated to control, weighting by ATT weights (`wts1`), i
 adjout3.wt1 <- coxph(Surv(out3.time, out2) ~ treated, data=toy, weights=wts1)
 wt_att_results3 <- tidy(adjout3.wt1, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
+wt_att_results3
 ```
 
 The `exp(coef)` output gives the relative hazard of the event comparing treated subjects to control subjects.
@@ -1646,6 +1659,8 @@ cox.zph(adjout3.wt1); plot(cox.zph(adjout3.wt1), var="treated")
 adjout3.wt2 <- coxph(Surv(out3.time, out2) ~ treated, data=toy, weights=wts2)
 wt_ate_results3 <- tidy(adjout3.wt2, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
+wt_ate_results3
 ```
 
 And here's the check of the proportional hazards assumption...
@@ -1662,6 +1677,8 @@ wts3 <- get.weights(ps.toy, stop.method = "es.mean")
 adjout3.wt3 <- coxph(Surv(out3.time, out2) ~ treated, data=toy, weights=wts3)
 wt_twangatt_results3 <- tidy(adjout3.wt3, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
+wt_twangatt_results3
 ```
 
 
@@ -1694,6 +1711,8 @@ Here, we fit a linear regression model with `linps` added as a covariate.
 adj.reg.out1 <- lm(out1.cost ~ treated + linps, data=toy)
 
 adj_out1 <- tidy(adj.reg.out1, conf.int = TRUE) %>% filter(term == "treated")
+
+adj_out1
 ```
 
 ## ... on Outcome 2 [a binary outcome]
@@ -1705,6 +1724,8 @@ adj.reg.out2 <- glm(out2 ~ treated + linps, data=toy, family=binomial())
 
 adj_out2 <- tidy(adj.reg.out2, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
+adj_out2
 ```
 
 ## ... on Outcome 3 [a time-to-event outcome]
@@ -1718,6 +1739,8 @@ adj.reg.out3 <- coxph(Surv(out3.time, out2) ~ treated + linps, data=toy)
 
 adj_out3 <- tidy(adj.reg.out2, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
+adj_out3
 ```
 
 The `exp(coef)` section of the `summary` for this model indicates the relative hazard estimates and associated 95\% CI.
@@ -1769,6 +1792,7 @@ toywt1.design <- svydesign(ids=~1, weights=~wts1, data=toy) # using ATT weights
 dr.out1.wt1 <- svyglm(out1.cost ~ treated + linps, design=toywt1.design)
 
 dr_att_out1 <- tidy(dr.out1.wt1, conf.int = TRUE) %>% filter(term == "treated")
+
 dr_att_out1
 ```
 
@@ -1780,6 +1804,7 @@ toywt2.design <- svydesign(ids=~1, weights=~wts2, data=toy) # using ATE weights
 dr.out1.wt2 <- svyglm(out1.cost ~ treated + linps, design=toywt2.design)
 
 dr_ate_out1 <- tidy(dr.out1.wt2, conf.int = TRUE) %>% filter(term == "treated")
+
 dr_ate_out1
 ```
 
@@ -1793,6 +1818,7 @@ toywt3.design <- svydesign(ids=~1, weights=~wts3, data=toy) # twang ATT weights
 dr.out1.wt3 <- svyglm(out1.cost ~ treated + linps, design=toywt3.design)
 
 dr_twangatt_out1 <- tidy(dr.out1.wt3, conf.int = TRUE) %>% filter(term == "treated")
+
 dr_twangatt_out1
 ```
 
@@ -1808,6 +1834,7 @@ dr.out2.wt1 <- svyglm(out2 ~ treated + linps, design=toywt1.design,
                       family=quasibinomial())
 dr_att_out2 <- tidy(dr.out2.wt1, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
 dr_att_out2
 ```
 
@@ -1818,6 +1845,7 @@ dr.out2.wt2 <- svyglm(out2.event ~ treated + linps, design=toywt2.design,
                       family=quasibinomial())
 dr_ate_out2 <- tidy(dr.out2.wt2, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
 dr_ate_out2
 ```
 
@@ -1828,6 +1856,7 @@ dr.out2.wt3 <- svyglm(out2 ~ treated + linps, design=toywt3.design,
                       family=quasibinomial())
 dr_twangatt_out2 <- tidy(dr.out2.wt3, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
 dr_twangatt_out2
 ```
 
@@ -1844,6 +1873,7 @@ The Cox model comparing treated to control, weighting by ATT weights (`wts1`), i
 dr.out3.wt1 <- coxph(Surv(out3.time, out2) ~ treated + linps, data=toy, weights=wts1)
 dr_att_out3 <- tidy(dr.out3.wt1, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
 dr_att_out3
 ```
 
@@ -1862,6 +1892,7 @@ dr.out3.wt2 <- coxph(Surv(out3.time, out2) ~ treated + linps, data=toy, weights=
 
 dr_ate_out3 <- tidy(dr.out3.wt2, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
 dr_ate_out3
 ```
 
@@ -1878,6 +1909,7 @@ dr.out3.wt3 <- coxph(Surv(out3.time, out2) ~ treated + linps,
                      data=toy, weights=wts3)
 dr_twangatt_out3 <- tidy(dr.out3.wt3, exponentiate = TRUE, conf.int = TRUE) %>% 
     filter(term == "treated")
+
 dr_twangatt_out3
 ```
 
@@ -2087,7 +2119,7 @@ The `mcontrol` function in the `rbounds` package can be helpful in such a settin
 
 # Wrapup
 
-If you run this script, you'll wind up with a version of the `toy` tibble that contains 200 observations on 28 variables, along with a `toy.codebook` list.
+If you run this script, you'll wind up with a version of the `toy` tibble that contains 400 observations on 28 variables, along with a `toy.codebook` list.
 
 You'll also have two new functions, called `szd` and `rubin3`, that, with some modification, may be useful elsewhere.
 
