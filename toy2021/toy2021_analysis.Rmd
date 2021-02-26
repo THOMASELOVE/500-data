@@ -635,8 +635,10 @@ ggplot(match_szd, aes(x = pre.szd, y = reorder(covnames, pre.szd))) +
 ## Using `cobalt` to build a "Love Plot" after Matching
 
 ```{r }
-b <- bal.tab(match1, treated ~ covA + covB + covC + covD + covE + covF + 
-                        Asqr + BC + BD + ps + linps, data=toy, 
+b <- bal.tab(match1, 
+             treated ~ covA + covB + covC + covD + 
+               covE + covF + Asqr + BC + BD + ps + linps, 
+             data=toy, stats = c("m", "v"), un = TRUE,
              quick = FALSE)
 b
 ```
@@ -1526,13 +1528,16 @@ plot(ps.toy, plots = 3)
 ### Assessing Balance with `cobalt`
 
 ```{r}
-bal.tab(ps.toy, full.stop.method = "es.mean.att")
+b2 <- bal.tab(ps.toy, full.stop.method = "es.mean.att", 
+        stats = c("m", "v"), un = TRUE)
+
+b2
 ```
 
 ## Semi-Automated Love plot of Standardized Differences
 
 ```{r}
-p <- love.plot(bal.tab(ps.toy), 
+p <- love.plot(b2, 
                threshold = .1, size = 3, 
                title = "Standardized Diffs and TWANG ATT weighting")
 p + theme_bw()
@@ -1541,7 +1546,7 @@ p + theme_bw()
 ## Semi-Automated Love plot of Variance Ratios
 
 ```{r}
-p <- love.plot(bal.tab(ps.toy), stat = "v",
+p <- love.plot(b2, stat = "v",
                threshold = 1.25, size = 3, 
                title = "Variance Ratios: TWANG ATT weighting")
 p + theme_bw()
@@ -2160,3 +2165,10 @@ rm(list = c("adj.m.out1", "adj.m.out1.tidy", "adj.m.out2", "adj.m.out2_tidy",
 "wt_att_results3", "wt_twangatt_results1", "wt_twangatt_results2", 
 "wt_twangatt_results3", "wts3", "X", "Y"))
 ```
+
+## Session Information
+
+```{r}
+xfun::session_info()
+```
+
