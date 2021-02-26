@@ -3,15 +3,15 @@ title: "The Lindner Example"
 author: "Wyatt P. Bensken and Harry Persaud"
 date: 'Version: `r Sys.Date()`'
 output:
+    pdf_document:
+        toc: yes
+        number_sections: TRUE
     html_document:
         toc: yes
         toc_float: TRUE
         number_sections: TRUE
         code_folding: show
         code_download: TRUE
-    pdf_document:
-        toc: yes
-        number_sections: TRUE
 ---
 
 ```{r setup, include=FALSE}
@@ -102,6 +102,10 @@ lindner_raw$diabetic_f <- factor(lindner_raw$diabetic, levels = c(1,0),
 lindner_raw$acutemi_f <- factor(lindner_raw$acutemi, levels = c(1,0),
                                 labels = c("yes", "no"))
 
+# Add patientid
+
+lindner_raw <- tibble::rowid_to_column(lindner_raw, "patientid")
+
 # Make lindner dataset with "clean" name. 
 lindner_clean <- lindner_raw
 ```
@@ -121,7 +125,7 @@ Information was copy/pasted from [here](https://www.rdocumentation.org/packages/
 
 - `sixMonthSurvive`/`sixMonthSurvive_f` (**Binary Outcome**): "Survival at six months a recoded version of lifepres."
 
-- `treated`/`treated_f` (**Exoisure**): "Numeric treatment selection indicator; 0 implies usual PCI care alone; 1 implies usual PCI care deliberately augmented by either planned or rescue treatment with abciximab."
+- `treated`/`treated_f` (**Exposure**): "Numeric treatment selection indicator; 0 implies usual PCI care alone; 1 implies usual PCI care deliberately augmented by either planned or rescue treatment with abciximab."
 
 - `stent`/`stent_f`: "Coronary stent deployment; numeric, with 1 meaning YES and 0 meaning NO."
 
@@ -136,6 +140,8 @@ Information was copy/pasted from [here](https://www.rdocumentation.org/packages/
 - `ejecfrac`: "Left ejection fraction; numeric value from 0 percent to 90 percent."
 
 - `ves1proc`: "Number of vessels involved in the patient's initial PCI procedure; numeric integer from 0 to 5."
+
+- `patientid`: a made-up order of numbers to assign patient IDs for later use
 
 * Note: Percutaneous Coronary Intervention (PCI)
 
@@ -548,7 +554,8 @@ When we look at the plots without replacement and with replacement side-by-side,
 Again, we can also use an automated way to make the Love Plot.
 
 ```{r}
-cobalt_tab <- bal.tab(match1, treated ~ stent + height + female + diabetic + acutemi + ejecfrac + ves1proc + ps + linps, data=lindner_clean, un = TRUE)
+cobalt_tab <- bal.tab(match1, treated ~ stent + height + female + diabetic + acutemi + ejecfrac + ves1proc + ps + linps, data=lindner_clean, un = TRUE,
+                      stats = c("m","v"))
 
 cobalt_tab
 ```
@@ -575,6 +582,18 @@ match_vrat <- data.frame(names = covnames, pre.vratio, post.vratio, row.names=co
 print(match_vrat, digits=2)
 ```
 
+### Using 'cobalt' to make a Love Plot of Variance Ratios
+
+```{r}
+p <- love.plot(cobalt_tab, stats = "v", threshold = .1, size = 3,
+               var.order = "unadjusted",
+               title = "Variance Ratios after 1:1 Matching With Replacement",
+               stars = "")
+
+p + theme_bw()
+```
+
+
 ## Creating a dataframe containing the matched sample
 
 ```{r}
@@ -583,6 +602,14 @@ lindner_clean.matchedsample <- cbind(matches, lindner_clean[c(match1$index.contr
 
 lindner_clean.matchedsample %>% count(treated_f)
 ```
+### How many times were the non-treated patients matched?
+
+```{r}
+lindner_clean.matchedsample %>% filter(treated_f == "control") %>% 
+    count(patientid) %>%
+    janitor::tabyl(n)
+```
+
 
 ## Reassessing Rubin's Rules after 1:1 matching with replacement
 
@@ -1268,8 +1295,10 @@ dr_twangatt_out2
 
 - **Estimate** `r round(dr_twangatt_out2$estimate,2)` (95% CI: `r round(dr_twangatt_out2$conf.low,2)`, `r round(dr_twangatt_out2$conf.high,2)`)
 
+## Session Information
+
 ```{r}
-sessioninfo::session_info()
+xfun::session_info()
 ```
 
 
