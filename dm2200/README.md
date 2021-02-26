@@ -26,11 +26,3 @@ The purpose of this (simulated) example is to demonstrate a range of propensity 
 7. 1:1 optimal matching without replacement
 8. 1:2 optimal matching without replacement
 
-
-## Other approaches that *may* appear before the end of the semester...
-
-- Using the `MatchIt` package
-    1. Full Matching
-    2. Genetic Matching
-    3. Coarsened Exact Matching 
-
