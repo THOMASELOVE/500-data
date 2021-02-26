@@ -6,7 +6,7 @@ Here is the [R Markdown file](https://github.com/THOMASELOVE/500-data/blob/maste
 
 I've also placed an [HTML version on RPubs](https://rpubs.com/TELOVE/dm2200-500) at https://rpubs.com/TELOVE/dm2200-500.
 
-The `dm2200.csv` data file, in [raw, downloadable form](https://raw.githubusercontent.com/THOMASELOVE/500-data/master/dm2200/data/dm2200.csv).
+The `dm2200.csv` data file is available in [raw, downloadable form here](https://raw.githubusercontent.com/THOMASELOVE/500-data/master/dm2200/data/dm2200.csv).
 
 The purpose of this (simulated) example is to demonstrate a range of propensity score matching methods in R. As of the most recent update, this includes:
 
