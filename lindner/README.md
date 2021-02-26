@@ -6,6 +6,12 @@ The analysis provided here was developed by **Wyatt Bensken** and **Harry Persau
 
 We hope you find this helpful.
 
+## Updates
+
+1. Updated 2021-02-25 to add in new material about the change in the `cobalt` package and efficiently demonstrate how in a 1:many match a way to evaluate how many times each individual (in this case a control) was matched.
+
+--------
+
 - The latest [R Markdown version (code only) is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner_2021.Rmd).
 - An [HTML version is available for viewing on RPubs](https://rpubs.com/TELOVE/lindner-2021-500) at https://rpubs.com/TELOVE/lindner-2021-500.
 - The latest [PDF version is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner_2021.pdf).
