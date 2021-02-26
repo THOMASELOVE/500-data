@@ -5,10 +5,13 @@ date: "`r Sys.Date()`"
 output: 
     html_document:
         toc: TRUE
+        toc_float: TRUE
+        number_sections: TRUE
         code_folding: show
-    github_document:
-        toc: TRUE
+        code_download: TRUE
 ---
+
+# Setup
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(comment = NA)
@@ -16,9 +19,8 @@ knitr::opts_chunk$set(comment = NA)
 
 This document demonstrates multiple matching strategies incorporating the propensity score, including the assessment of covariate balance before and after matching. We focus on binary and quantitative outcomes in a (simulated) electronic health records data setting. It uses the `cobalt` package extensively. See the Key References section at the end of the document.
 
-## Setup
 
-```{r, message = FALSE}
+```{r, message = FALSE, warning = FALSE}
 library(skimr); library(tableone)
 library(magrittr); library(janitor) 
 library(broom); library(survival); library(lme4)
@@ -196,9 +198,10 @@ covs_1plus <- dm2200 %>%
            statin, ace_arb, betab, depr_dx, eyeex, pneumo,
            ps, linps)
 
-bal1 <- bal.tab(M = match_1,
+bal1 <- bal.tab(match_1,
                 treat = dm2200$exposure,
                 covs = covs_1plus, quick = FALSE,
+                data = dm2200, stats = c("m", "v"),
                 un = TRUE, disp.v.ratio = TRUE)
 bal1
 ```
@@ -211,9 +214,10 @@ We'll build a little table of the Rubin's Rules (1 and 2) before and after our `
 covs_for_rubin <- dm2200 %>%
     select(linps)
 
-rubin_m1 <- bal.tab(M = match_1,
+rubin_m1 <- bal.tab(match_1,
                 treat = dm2200$treat,
-                covs = covs_for_rubin, 
+                covs = covs_for_rubin,
+                data = dm2200, stats = c("m", "v"),
                 un = TRUE, disp.v.ratio = TRUE)[1]
 
 rubin_report_m1 <- tibble(
@@ -238,7 +242,7 @@ rubin_report_m1 %>% knitr::kable(digits = 2)
 We can look at any particular variable with this approach, for example, age:
 
 ```{r}
-bal.plot(obj = match_1,
+bal.plot(match_1,
          treat = dm2200$exposure,
          covs = covs_1plus,
          var.name = "age", 
@@ -250,7 +254,7 @@ bal.plot(obj = match_1,
 We could also look at the propensity scores in each group, perhaps in mirrored histograms, with ...
 
 ```{r}
-bal.plot(obj = match_1,
+bal.plot(match_1,
          treat = dm2200$exposure,
          covs = covs_1plus,
          var.name = "ps", 
@@ -263,7 +267,7 @@ bal.plot(obj = match_1,
 Can we look at a categorical variable this way?
 
 ```{r}
-bal.plot(obj = match_1,
+bal.plot(match_1,
          treat = dm2200$exposure,
          covs = covs_1plus,
          var.name = "insur", 
@@ -343,11 +347,11 @@ dm2200_matched2 %$% n_distinct(subject)
 This match repeats each exposure A subject twice, to match up with the 400 exposure B subjects.
 
 ```{r}
-dm2200_matched2 %>% count(exposure)
+dm2200_matched2 %>% count(exposure) 
 ```
 
 ```{r}
-dm2200_matched2 %>% count(subject, exposure)
+dm2200_matched2 %>% count(subject, exposure) %>% head()
 ```
 
 ## Checking Covariate Balance for our 1:2 Greedy Match
@@ -361,9 +365,10 @@ covs_2plus <- dm2200 %>%
            statin, ace_arb, betab, depr_dx, eyeex, pneumo,
            ps, linps)
 
-bal2 <- bal.tab(M = match_2,
+bal2 <- bal.tab(match_2,
                 treat = dm2200$exposure,
                 covs = covs_2plus, quick = FALSE,
+                data = dm2200, stats = c("m", "v"),
                 un = TRUE, disp.v.ratio = TRUE)
 bal2
 ```
@@ -376,9 +381,10 @@ We'll build a little table of the Rubin's Rules (1 and 2) before and after our 1
 covs_for_rubin <- dm2200 %>%
     select(linps)
 
-rubin_m2 <- bal.tab(M = match_2,
+rubin_m2 <- bal.tab(match_2,
                 treat = dm2200$treat,
                 covs = covs_for_rubin, 
+                data = dm2200, stats = c("m", "v"),
                 un = TRUE, disp.v.ratio = TRUE)[1]
 
 rubin_report_m12 <- tibble(
@@ -401,7 +407,7 @@ rubin_report_m12 %>% knitr::kable(digits = 2)
 Looking at the propensity scores in each group, perhaps in mirrored histograms, we have ...
 
 ```{r}
-bal.plot(obj = match_2,
+bal.plot(match_2,
          treat = dm2200$exposure,
          covs = covs_2plus,
          var.name = "ps", 
@@ -508,9 +514,10 @@ covs_3plus <- dm2200 %>%
            statin, ace_arb, betab, depr_dx, eyeex, pneumo,
            ps, linps)
 
-bal3 <- bal.tab(M = match_3,
+bal3 <- bal.tab(match_3,
                 treat = dm2200$exposure,
                 covs = covs_3plus, quick = FALSE,
+                data = dm2200, stats = c("m", "v"),
                 un = TRUE, disp.v.ratio = TRUE)
 bal3
 ```
@@ -523,9 +530,10 @@ We'll build a little table of the Rubin's Rules (1 and 2) before and after our 1
 covs_for_rubin <- dm2200 %>%
     select(linps)
 
-rubin_m3 <- bal.tab(M = match_3,
+rubin_m3 <- bal.tab(match_3,
                 treat = dm2200$treat,
                 covs = covs_for_rubin, 
+                data = dm2200, stats = c("m", "v"),
                 un = TRUE, disp.v.ratio = TRUE)[1]
 
 rubin_report_m123 <- tibble(
@@ -552,7 +560,7 @@ rubin_report_m123 %>% knitr::kable(digits = 2)
 Looking at the propensity scores in each group, perhaps in mirrored histograms, we have ...
 
 ```{r}
-bal.plot(obj = match_3,
+bal.plot(match_3,
          treat = dm2200$exposure,
          covs = covs_3plus,
          var.name = "ps", 
@@ -643,9 +651,10 @@ covs_4plus <- dm2200 %>%
            statin, ace_arb, betab, depr_dx, eyeex, pneumo,
            ps, linps)
 
-bal4 <- bal.tab(M = match_4,
+bal4 <- bal.tab(match_4,
                 treat = dm2200$exposure,
                 covs = covs_4plus, quick = FALSE,
+                data = dm2200, stats = c("m", "v"),
                 un = TRUE, disp.v.ratio = TRUE)
 bal4
 ```
@@ -658,9 +667,10 @@ We'll build a little table of the Rubin's Rules (1 and 2) before and after our 1
 covs_for_rubin <- dm2200 %>%
     select(linps)
 
-rubin_m4 <- bal.tab(M = match_4,
+rubin_m4 <- bal.tab(match_4,
                 treat = dm2200$treat,
                 covs = covs_for_rubin, 
+                data = dm2200, stats = c("m", "v"),
                 un = TRUE, disp.v.ratio = TRUE)[1]
 
 rubin_report_m1234 <- tibble(
@@ -687,7 +697,7 @@ rubin_report_m1234 %>% knitr::kable(digits = 2)
 Looking at the propensity scores in each group, perhaps in mirrored histograms, we have ...
 
 ```{r}
-bal.plot(obj = match_4,
+bal.plot(match_4,
          treat = dm2200$exposure,
          covs = covs_4plus,
          var.name = "ps", 
@@ -756,7 +766,8 @@ covs_1 <- dm2200 %>%
            statin, ace_arb, betab, depr_dx, eyeex, pneumo)
 
 match_5 <- matchit(f.build("treat", covs_1), data = dm2200,
-                   distance = "linear.logit", method = "nearest", 
+                   distance = "glm", link = "linear.logit",
+                   method = "nearest", 
                    ratio = 1, replace = FALSE)
 
 match_5
@@ -856,7 +867,7 @@ rubin_report_m5 %>% knitr::kable(digits = 2)
 Looking at the linear propensity scores in each group, in mirrored histograms, we have ...
 
 ```{r}
-bal.plot(obj = match_5,
+bal.plot(match_5,
          var.name = "distance", 
          which = "both",
          sample.names = 
@@ -898,7 +909,7 @@ As in `match_5`, we'll match on the linear propensity score (by specifying the `
 
 ```{r}
 match_6 <- matchit(f.build("treat", covs_1), data = dm2200,
-                   distance = "linear.logit", 
+                   distance = "glm", link = "linear.logit", 
                    method = "nearest", caliper = 0.25,
                    ratio = 1, replace = FALSE)
 
@@ -996,7 +1007,7 @@ rubin_report_m56 %>% knitr::kable(digits = 2)
 Looking at the linear propensity scores in each group, in mirrored histograms, we have ...
 
 ```{r}
-bal.plot(obj = match_6,
+bal.plot(match_6,
          var.name = "distance", 
          which = "both",
          sample.names = 
@@ -1034,13 +1045,12 @@ love.plot(bal6,
 
 # `match_7` 1:1 Optimal Matching with `Matchit` 
 
-As in `match_5`, we'll match on the linear propensity score (by specifying the `distance` to use the logistic link with the linear propensity score via `"linear.logit"`), but now we'll use an optimal 1:1 matching without replacement.
+As in `match_5`, we'll match on the linear propensity score (by specifying the `distance` to use the logistic link with the linear propensity score via `"linear.logit"`), but now we'll use an optimal 1:1 matching (which is always done in `matchit` without replacement).
 
 ```{r}
 match_7 <- matchit(f.build("treat", covs_1), data = dm2200,
-                   distance = "linear.logit", 
-                   method = "optimal", 
-                   ratio = 1, replace = FALSE)
+                   distance = "glm", link = "linear.logit",
+                   method = "optimal", ratio = 1)
 
 match_7
 ```
@@ -1149,7 +1159,7 @@ Apparently not, but they are very similar.
 Looking at the linear propensity scores in each group, in mirrored histograms, we have ...
 
 ```{r}
-bal.plot(obj = match_7,
+bal.plot(match_7,
          var.name = "distance", 
          which = "both",
          sample.names = 
@@ -1192,9 +1202,8 @@ Again, we'll match on the linear propensity score (by specifying the `distance` 
 
 ```{r}
 match_8 <- matchit(f.build("treat", covs_1), data = dm2200,
-                   distance = "linear.logit", 
-                   method = "optimal", ratio = 2, 
-                   replace = FALSE)
+                   distance = "glm", link = "linear.logit", 
+                   method = "optimal", ratio = 2)
 
 match_8
 ```
@@ -1298,7 +1307,7 @@ rubin_report_m5678 %>% knitr::kable(digits = 2)
 Looking at the linear propensity scores in each group, in mirrored histograms, we have ...
 
 ```{r}
-bal.plot(obj = match_8,
+bal.plot(match_8,
          var.name = "distance", 
          which = "both",
          sample.names = 
@@ -1334,17 +1343,15 @@ love.plot(bal8,
          caption = "* indicates raw mean differences (for binary variables)")
 ```
 
-
-# Planned matches coming as soon as Dr. Love finishes them
-
-- Optimal Matching using the `MatchIt` package
-- Full Matching using the `MatchIt` package
-- Genetic Matching using the `MatchIt` package
-- Coarsened Exact Matching using the `MatchIt` package
-
 # Outcome Models
 
 We'll fit two (overly simplistic) outcome models, one for `bp_good` (our binary outcome) and another for `bmi` (our quantitative outcome.) Later, we'll compare the `exposure` effect estimates made here to the estimates we obtain after propensity matching. In each case, we'll focus on ATT estimates (average treated effect on the treated) rather than ATE estimates.
+
+## Potential Fitting Problems
+
+When you fit mixed effect models as I have done below for binary and for quantitative outcomes, you may find that the model fit appears to be singular, which means that some element of the variance-covariance matrix estimated by `lmer` is zero. This may be an ignorable problem in this setting, since the problem is usually with the separation of residual effects from random match effects. We're focusing right now on the fixed effects, which can be summarized as indicated below.
+
+But, there's certainly an argument to be made that an alternative strategy for estimating the match might be more appropriate. We won't worry about that in this example, and just display what we get.
 
 ## Unadjusted Models prior to Propensity Matching
 
@@ -1397,10 +1404,12 @@ dm2200_matched1 <- dm2200_matched1 %>%
 result_match1_bmi <- lmer(bmi ~ (exposure == "A") + 
                               (1 | match1_matches_f), 
                           data = dm2200_matched1)
+```
 
-tidy(result_match1_bmi, 
+```{r, message = FALSE}
+broom.mixed::tidy(result_match1_bmi, 
      conf.int = TRUE, conf.level = 0.95) %>% 
-    filter(group == "fixed") %>%
+    filter(effect == "fixed") %>%
     select(term, estimate, std.error, 
            conf.low, conf.high) %>%
     knitr::kable(digits = 3)
@@ -1432,9 +1441,9 @@ result_match2_bmi <- lmer(bmi ~ (exposure == "A") +
                               (1 | match2_matches_f), 
                           data = dm2200_matched2)
 
-tidy(result_match2_bmi, 
+broom.mixed::tidy(result_match2_bmi, 
      conf.int = TRUE, conf.level = 0.95) %>% 
-    filter(group == "fixed") %>%
+    filter(effect == "fixed") %>%
     select(term, estimate, std.error, 
            conf.low, conf.high) %>%
     knitr::kable(digits = 3)
@@ -1466,9 +1475,9 @@ result_match3_bmi <- lmer(bmi ~ (exposure == "A") +
                               (1 | match3_matches_f), 
                           data = dm2200_matched3)
 
-tidy(result_match3_bmi, 
+broom.mixed::tidy(result_match3_bmi, 
      conf.int = TRUE, conf.level = 0.95) %>% 
-    filter(group == "fixed") %>%
+    filter(effect == "fixed") %>%
     select(term, estimate, std.error, 
            conf.low, conf.high) %>%
     knitr::kable(digits = 3)
@@ -1500,9 +1509,9 @@ result_match4_bmi <- lmer(bmi ~ (exposure == "A") +
                               (1 | match4_matches_f), 
                           data = dm2200_matched4)
 
-tidy(result_match4_bmi, 
+broom.mixed::tidy(result_match4_bmi, 
      conf.int = TRUE, conf.level = 0.95) %>% 
-    filter(group == "fixed") %>%
+    filter(effect == "fixed") %>%
     select(term, estimate, std.error, 
            conf.low, conf.high) %>%
     knitr::kable(digits = 3)
@@ -1532,9 +1541,9 @@ result_match5_bmi <- lmer(bmi ~ (exposure == "A") +
                               (1 | match5_matches), 
                           data = dm2200_matched5)
 
-tidy(result_match5_bmi, 
+broom.mixed::tidy(result_match5_bmi, 
      conf.int = TRUE, conf.level = 0.95) %>% 
-    filter(group == "fixed") %>%
+    filter(effect == "fixed") %>%
     select(term, estimate, std.error, 
            conf.low, conf.high) %>%
     knitr::kable(digits = 3)
@@ -1564,9 +1573,9 @@ result_match6_bmi <- lmer(bmi ~ (exposure == "A") +
                               (1 | match6_matches), 
                           data = dm2200_matched6)
 
-tidy(result_match6_bmi, 
+broom.mixed::tidy(result_match6_bmi, 
      conf.int = TRUE, conf.level = 0.95) %>% 
-    filter(group == "fixed") %>%
+    filter(effect == "fixed") %>%
     select(term, estimate, std.error, 
            conf.low, conf.high) %>%
     knitr::kable(digits = 3)
@@ -1596,9 +1605,9 @@ result_match7_bmi <- lmer(bmi ~ (exposure == "A") +
                               (1 | match7_matches), 
                           data = dm2200_matched7)
 
-tidy(result_match7_bmi, 
+broom.mixed::tidy(result_match7_bmi, 
      conf.int = TRUE, conf.level = 0.95) %>% 
-    filter(group == "fixed") %>%
+    filter(effect == "fixed") %>%
     select(term, estimate, std.error, 
            conf.low, conf.high) %>%
     knitr::kable(digits = 3)
@@ -1624,13 +1633,16 @@ tidy(result_match8_bp, exponentiate = TRUE,
 We'll use a mixed model to account for our 1:1 matching. The matches here are treated as a random factor, with the exposure a fixed factor, in the `lme4` package.
 
 ```{r}
+dm2200_matched8 <- dm2200_matched8 %>%
+    mutate(match8_f = factor(match8_matches))
+
 result_match8_bmi <- lmer(bmi ~ (exposure == "A") + 
-                              (1 | match8_matches), 
+                              (1 | match8_f),  
                           data = dm2200_matched8)
 
-tidy(result_match8_bmi, 
+broom.mixed::tidy(result_match8_bmi, 
      conf.int = TRUE, conf.level = 0.95) %>% 
-    filter(group == "fixed") %>%
+    filter(effect == "fixed") %>%
     select(term, estimate, std.error, 
            conf.low, conf.high) %>%
     knitr::kable(digits = 3)
@@ -1673,6 +1685,13 @@ rm(bal1, bal2, bal3, bal4,
 
 Matching in these examples was performed using the Matching package (Sekhon, 2011), and covariate balance was assessed using cobalt (Greifer, 2020), both in R (R Core Team, 2019).
 
-- Greifer, N. (2020). cobalt: Covariate Balance Tables and Plots. R package version 4.0.0.
+- Greifer, N. (2020). cobalt: Covariate Balance Tables and Plots. R package version 4.3.0.
 - Sekhon, J.S. (2011) Multivariate and Propensity Score Matching Software with Automated Balance Optimization: The Matching Package for R, *J of Statistical Software*, 2011, 42: 7, http://www.jstatsoft.org/. R package version 4.9-6.
 -  R Core Team (2019). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
+
+# Session Information
+
+```{r}
+xfun::session_info()
+```
+
