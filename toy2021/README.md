@@ -2,7 +2,12 @@
 
 The entire example can be downloaded from the front page of the 500-data website.
 
-**NOTE** I updated this example immediately after completing the pre-lecture recording to fix the small issues I identified in that recording. Please be sure to work with the version labeled 2021-02-22 or later.
+## Updates since initial post
+
+1. Updated 2021-02-22 after completing the pre-lecture recording to fix the small issues I identified in that recording. 
+2. Updated again 2021-02-25 to deal with breaking changes in the `cobalt` package.
+
+-----
 
 Here is the [R Markdown file](https://github.com/THOMASELOVE/500-data/blob/master/toy2021/toy2021_analysis.Rmd) including all code.
 
