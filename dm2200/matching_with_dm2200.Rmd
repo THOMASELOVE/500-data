@@ -1683,9 +1683,11 @@ rm(bal1, bal2, bal3, bal4,
 
 # Key References
 
-Matching in these examples was performed using the Matching package (Sekhon, 2011), and covariate balance was assessed using cobalt (Greifer, 2020), both in R (R Core Team, 2019).
+Matching in these examples was performed using the Matching package (Sekhon, 2011), and the MatchIt package and covariate balance was assessed using cobalt (Greifer, 2020), both in R (R Core Team, 2019).
 
 - Greifer, N. (2020). cobalt: Covariate Balance Tables and Plots. R package version 4.3.0.
+- [MatchIt](https://kosukeimai.github.io/MatchIt/): Nonparametric Preprocessing for Parametric Causal Inference, R package version 4.1.0.
+    - See also [MatchIt: Getting Started](https://cran.r-project.org/web/packages/MatchIt/vignettes/MatchIt.html) by Noah Greifer.
 - Sekhon, J.S. (2011) Multivariate and Propensity Score Matching Software with Automated Balance Optimization: The Matching Package for R, *J of Statistical Software*, 2011, 42: 7, http://www.jstatsoft.org/. R package version 4.9-6.
 -  R Core Team (2019). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
 
