@@ -1,0 +1,1460 @@
+---
+title: "Some Propensity Ideas and the Right Heart Catheterization Data"
+author: "Thomas E. Love, Ph.D."
+date: "`r Sys.Date()`"
+output: 
+    html_document:
+        toc: TRUE
+        toc_float: TRUE
+        number_sections: TRUE
+        code_folding: show
+        code_download: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+```
+
+# Preliminaries
+
+## Study Background
+
+This example is based on the Right Heart Catheterization data set available at [Vanderbilt University](https://biostat.app.vumc.org/wiki/Main/DataSets) and described [here](https://biostat.app.vumc.org/wiki/pub/Main/DataSets/rhc.html). The key reference is Connors AF et al. 1996 The effectiveness of RHC in the initial care of critically ill patients. [*JAMA* 276: 889-897](http://jamanetwork.com/journals/jama/fullarticle/407990). Connors et al. used a logistic regression model to develop a propensity score then: [a] matched RHC to non-RHC patients and [b] adjusted for propensity score in models for outcomes, followed by a sensitivity analysis. The key conclusions were that RHC patients had decreased survival time, and any unmeasured confounder would have to be somewhat strong to explain away the results.
+
+## Loading Packages
+
+```{r load_packages, message=FALSE, warning = FALSE}
+library(here); library(janitor); library(naniar)
+library(tableone); library(broom); library(survival)
+library(Matching); library(cobalt); library(rgenoud)
+library(lme4); library(rbounds); library(conflicted)
+library(tidyverse)
+
+conflict_prefer("select", "dplyr")
+conflict_prefer("filter", "dplyr")
+
+theme_set(theme_bw())
+```
+
+## Importing the Data
+
+The observations in the `rhc` data set describe 5,735 subjects who are critically ill, and most variables were obtained during day 1 of a hospitalization. We'll begin by importing the `rhc` data into a **tibble** (a lazy and surly data frame - see R's help file on tibbles for more details) in R that contains 5,735 observations (rows) on 63 variables (columns). 
+
+In the import process, we're going to do a few things to simplify the process of getting a functional data set.
+
+- The automated column specification in R's **readr** package uses the first 1000 rows of the data set - with the `rhc` data, this creates parsing failures for several measures which are assumed to be integers but actually should be parsed as doubles (continuous variables). So we specify the column types for those variables here then allow R to identify the type for the other columns.
+- By default, **readr**'s `read_csv` command treats all string variables as characters, and not as factors. For several multicategorical variables, we want a factor representation in a specific order, so we'll specify that, too, also using the `cols` function.
+
+```{r read_with_column_specs}
+column_types_rhc <- 
+    cols(urin1 = "d", meanbp1 = "d", resp1 = "d",
+    swang1 = col_factor(c("RHC", "No RHC")),
+    death = col_factor(c("No", "Yes")),
+    sex = col_factor(c("Male", "Female")),
+    cat1 = col_factor(c("ARF", "CHF", "Cirrhosis", "Colon Cancer", "Coma", "COPD",
+                        "Lung Cancer", "MOSF w/Malignancy", "MOSF w/Sepsis")),
+    dnr1 = col_factor(c("No", "Yes")),
+    card = col_factor(c("No", "Yes")),
+    gastr = col_factor(c("No", "Yes")),
+    hema = col_factor(c("No", "Yes")),
+    meta = col_factor(c("No", "Yes")),
+    neuro = col_factor(c("No", "Yes")),
+    ortho = col_factor(c("No", "Yes")),
+    renal = col_factor(c("No", "Yes")),
+    resp = col_factor(c("No", "Yes")),
+    seps = col_factor(c("No", "Yes")),
+    trauma = col_factor(c("No", "Yes")),
+    income = col_factor(c("Under $11k", "$11-$25k", "$25-$50k", "> $50k")),
+    ninsclas = col_factor(c("Private", "Private & Medicare", "Medicare", 
+                             "Medicare & Medicaid", "Medicaid", "No insurance")),
+    race = col_factor(c("white", "black", "other")),
+    ca = col_factor(c("No", "Yes", "Metastatic"))
+)
+
+```
+
+The data are available at the link below.
+
+```{r}
+rhc_raw <- read_csv("https://biostat.app.vumc.org/wiki/pub/Main/DataSets/rhc.csv", 
+                    col_types = column_types_rhc)
+```
+
+- After we import the data, we re-order the columns to present the SUPPORT patient identification code first, then the exposure (`swang1`), then information on the outcomes, then information on the covariates of interest for our work, dropping the other variables.
+
+```{r complete_import_process}
+rhc_cleaning <- rhc_raw %>% 
+    select(ptid, swang1, 
+           death, sadmdte, dschdte, dthdte, lstctdte,
+           age, sex, edu, income, ninsclas, race,
+           cat1, dnr1, wtkilo1, hrt1, meanbp1, resp1, temp1,
+           card, gastr, hema, meta, neuro, ortho, renal, 
+           resp, seps, trauma,
+           amihx, ca, cardiohx, chfhx, chrpulhx, dementhx, 
+           gibledhx, immunhx, liverhx, malighx, psychhx, 
+           renalhx, transhx, aps1, das2d3pc, scoma1, 
+           surv2md1, alb1, bili1, crea1, hema1, paco21, 
+           pafi1, ph1, pot1, sod1, wblc1)
+```
+
+## The Data Set after Initial Import
+
+The `rhc_cleaning` data at this stage is a tibble (a lazy and surly data frame) containing `r nrow(rhc_cleaning)` observations (rows) on `r ncol(rhc_cleaning)` variables (columns). The observations describe subjects who are critically ill, and most variables were obtained during  day 1 of a hospitalization.
+
+```{r}
+rhc_cleaning
+```
+
+## Any missingness?
+
+```{r impute_discharge_date}
+rhc_cleaning %>%
+    miss_var_summary()
+```
+
+We could also graph this with `gg_miss_var(rhc_cleaning)`. As it turns out, there were three variables in the raw `rhc` data that have missing values, but we've omitted one (about day 1 urine output) in creating this `rhc_cleaning` file. The remaining two are dates, and we'll address those in the material on creating our outcomes.
+
+# The Treatment / Exposure We'll Study
+
+The treatment/exposure we are studying is the presence of a Swan-Ganz (right heart) catheter on day 1, captured in the variable `swang1`. The Medline Plus description of right heart catheterization [is here](https://medlineplus.gov/ency/article/003870.htm). Basically, the procedure passes a thin tube into the right side of the heart and the arteries leading to the lungs, to measure the heart's function and blood flow. It's done in very ill patients for several reasons, and is also referred to as right heart catheterization and pulmonary artery catheterization. 
+
+```{r}
+rhc_cleaning %>% tabyl(swang1)
+```
+
+Of course, the most important issue to us is that each subject was not randomly allocated to either the "RHC" or "No RHC" group. Instead, this is an **observational** study, where each subject received their treatment (RHC or no) on the basis of what their providers thought would be best for them.
+
+# The 3 Outcomes We'll Study
+
+We will define three outcomes here: one binary, one quantitative, and one time-to-event. 
+
+- Our first outcome is in-study mortality, captured as a binary variable.
+- We will then define hospital length of stay, a quantitative variable, and then
+- Time to death, a time-to-event variable that will be right-censored for those who did not die during the study.
+
+## Mortality, a binary outcome: `death`
+
+One outcome is death during the study, as captured in the `death` variable. This is a **binary** outcome.
+
+```{r}
+rhc_cleaning %>% tabyl(death)
+```
+
+Those people without a value for `dthdte` turn out to be the people with `death` values of "No" and this makes sense, because `dthdte` is a code for date of death.
+
+## Working with Dates to Define the Time-Related Outcomes
+
+### The Raw Data on Dates
+
+Variable | Definition               | Values
+-------- | ------------------------ | ----------------------------------------
+`sadmdte`	| Study Admission Date    | Integer ranging from 10754 to 12441, indicating the \# of days after 1960-01-01, so study admission date range is actually 1989-06-11 to 1994-01-23.
+`dschdte` | Hospital Discharge Date | Integer ranging from 10757 to 12560, indicating the \# of days after 1960-01-01, so hospital discharge date range is actually 1989-06-14 to 1994-05-22. (**Note: 1 missing value**)
+`dthdte` | Death Date               | Integer ranging from 10757 to 12783, indicating the \# of days after 1960-01-01, so death date range is actually 1989-06-14 to 1994-12-31. The **2013 people with missing values** are those with No for `death`.
+`lstctdte` | Date of Last Contact   | Integer ranging from 10756 to 12644, indicating the \# of days after 1960-01-01, so death date range is actually 1989-06-13 to 1994-08-14.
+
+Next, we will develop the two other primary outcomes: survival time (which we'll store in `survdays`), and hospital length of stay (which will go in `hospdays`). 
+
+- It turns out that for three subjects, their dates of last contact appear to occur after their death dates, which is irritating, but doesn't affect us much since the only way in which we'll use the last contact date is for calculating survival time for patients *without* a death date. 
+
+### Impute hospital discharge date for the one missing value
+
+We could just impute a random value, but that's not a great idea, since hospital discharge date is tied to other information that is available to us for this patient. The subject with a missing hospital discharge date turns out to be `ptid` 08382.
+
+```{r}
+rhc_cleaning %>% filter(is.na(dschdte)) %>% 
+    select(ptid, death, sadmdte, dschdte, dthdte, lstctdte)
+```
+
+So the patient was admitted to the study on day 12386, had their last contact with the study on day 12582 (i.e. 196 days after study entry), and died on day 12780 (i.e. 394 days after study entry.) It seems rational to impute a value of hospital discharge date that falls in between their date of study admission and their date of last contact. 
+
+- Among the RHC patients, what is a reasonable guess as to the time from study admission to hospital discharge that we might apply to this patient? We could see what the distribution of these differences are in the available data, like so...
+
+```{r}
+mosaic::favstats(dschdte - sadmdte ~ swang1, data = rhc_cleaning)
+```
+
+I'll arbitrarily choose to impute a discharge date for `ptid` 08382 so as to yield a 25 day hospitalization, so as to affect the mean stay length within the RHC group as little as possible. 
+
+This implies that we'll impute a value of 12386 + 25 = 12411 for this patient.
+
+```{r}
+rhc_cleaning <- rhc_cleaning %>%
+    mutate(dschdte = replace_na(dschdte, 12411))
+
+rhc_cleaning %>% select(dschdte) %>% miss_var_summary()
+```
+
+## Length of initial hospital stay, a quantitative outcome: `hospdays`
+
+Our third outcome is length of initial hospital stay, which is captured by subtracting the study admission date (`sadmdte`) from the hospital discharge date (`dschdte`). This is a **quantitative** outcomes, and we will create it soon, and name it `hospdays` in our data set.
+
+
+```{r}
+rhc_cleaning <- rhc_cleaning %>%
+    mutate(hospdays = dschdte - sadmdte)
+
+mosaic::favstats(hospdays ~ swang1, data = rhc_cleaning)
+```
+
+It looks like all of these values are reasonable (in that they are all positive) and we have no missing values.
+
+## Survival Time in Days, a time-to-event outcome: `survdays`
+
+Another outcome is survival time in days (which is censored for all patients who did not die during the study), and which is captured by subtracting the study admission date (`sadmdte`) from the death date (`dthdte`) for the patients who died in study, and the study admission date (`sadmdte`) from the date of last contact (`lstctdte`) for the patients who did not die in study. This is a **time-to-event** outcome, and we will create it soon, and name it `survdays` in our data set.
+
+- For the subjects who died, this is straightforward, in that we take the death date and subtract the study admission date. 
+- For those who survived through the study, we take the date of last contact and subtract the study admission date, in order to get their (right censored) survival times.
+
+```{r}
+rhc_cleaning <- rhc_cleaning %>%
+    mutate(survdays = ifelse(death == "Yes", 
+                             dschdte - sadmdte,
+                             lstctdte - sadmdte))
+
+mosaic::favstats(survdays ~ death, data = rhc_cleaning)
+```
+
+Again, this looks reasonable. All of these values are strictly positive, for instance, and none seem wildly out of line, and we have no missing values. We also see that those who died had much shorter survival times (typically) than those who survived, which makes sense.
+
+We might also look at the `survdays` variable broken down by RHC status.
+
+```{r}
+mosaic::favstats(survdays ~ swang1, data = rhc_cleaning)
+```
+
+These seem quite comparable, so far, and again, they make sense (all are positive, and there are no missing values.)
+
+# The 50 Covariates We'll Study
+
+Our propensity model will eventually include 50 covariates, described below.
+
+## Group 1: Socio-demographics (6 covariates)
+
+Variable | Definition               
+-------- | ------------------------------------------------
+`age` | Age in years 
+`sex`	| Sex	
+`edu`	| Years of Education 
+`income` | Income Category (4 levels)
+`ninsclas` | Insurance Category (6 levels) 
+`race` | Self-Reported Race	(3 levels)
+
+Here's a Table 1 for these covariates.
+
+```{r covariates_demographics}
+vars01 <- c("age", "sex", "edu", "income", "ninsclas", "race")
+
+table1_01 <- 
+    CreateTableOne(vars = vars01, strata = "swang1", 
+                   data = rhc_cleaning, test = FALSE)
+
+print(table1_01, smd = TRUE)
+```
+
+- Two of these covariates show standardized mean differences larger than 0.10.
+
+## Group 2: Presentation at Admission (7 covariates)
+
+Variable | Definition               
+-------- | ------------------------------------------------
+`cat1`	| Primary disease category (9 levels)
+`dnr1`	| Do Not Resuscitate status, day 1 
+`wtkilo1`	| Weight in kg, day 1	
+`hrt1`	| Heart rate, day 1	
+`meanbp1`	| Mean Blood Pressure, day 1 
+`resp1`	| Respiratory rate, day 1
+`temp1`	| Temperature, C, day 1
+
+```{r covariates_admission_presentation}
+vars02 <- c("cat1", "dnr1", "wtkilo1", "hrt1", "meanbp1", 
+          "resp1", "temp1")
+
+table1_02 <- 
+    CreateTableOne(vars = vars02, strata = "swang1", 
+                   data = rhc_cleaning, test = FALSE)
+
+print(table1_02, smd = TRUE)
+```
+
+- Six of these covariates show standardized mean differences larger than 0.10.
+
+## Group 3: Admission Diagnosis Categories (10 covariates)
+
+Variable | Definition               
+-------- | ------------------------------------------------
+`card`	| Cardiovascular diagnosis	
+`gastr` | Gastrointestinal diagnosis
+`hema`	| Hematologic diagnosis
+`meta`	| Metabolic diagnosis
+`neuro`	| Neurological diagnosis
+`ortho`	| Orthopedic diagnosis
+`renal`	| Renal diagnosis
+`resp`	| Respiratory diagnosis	
+`seps`	| Sepsis diagnosis	
+`trauma` | Trauma diagnosis	
+
+```{r covariates_admission_diagnoses}
+vars03 <- c("card", "gastr", "hema", "meta", "neuro", "ortho",
+          "renal", "resp", "seps", "trauma")
+
+table1_03 <- 
+    CreateTableOne(vars = vars03, strata = "swang1", 
+                   data = rhc_cleaning, test = FALSE)
+
+print(table1_03, smd = TRUE)
+```
+
+- Seven of these covariates show standardized mean differences larger than 0.10.
+
+## Group 4: Comorbid Illness and Transfer Status (13 covariates)
+
+Variable | Definition               
+-------- | ------------------------------------------------
+`amihx`	| Definite Myocardial Infarction	
+`ca` | Cancer (3 levels)
+`cardiohx` | Acute MI, Peripheral Vascular Disease, Severe Cardiovascular Symptoms (NYHA-Class III), Very Severe Cardiovascular Symptoms (NYHA- IV)
+`chfhx` |	Congestive Heart Failure	
+`chrpulhx` |	Chronic Pulmonary Disease, Severe or Very Severe Pulmonary Disease	
+`dementhx` |	Dementia, Stroke or Cerebral Infarct, Parkinson's Disease	
+`gibledhx` |	Upper GI Bleeding	
+`immunhx` |	Immunosupperssion, Organ Transplant, HIV Positivity, Diabetes Mellitus Without End Organ Damage, Diabetes Mellitus With End Organ Damage, Connective Tissue Disease	
+`liverhx` |	Cirrhosis, Hepatic Failure 
+`malighx` |	Solid Tumor, Metastatic Disease, Chronic Leukemia/Myeloma, Acute Leukemia, Lymphoma	
+`psychhx` |	Psychiatric History, Active Psychosis or Severe Depression	
+`renalhx` |	Chronic Renal Disease, Chronic Hemodialysis or Peritoneal Dialysis	
+`transhx` |	Transfer (\> 24 Hours) from Another Hospital	
+
+```{r covariates_comorbidities_and_transfer}
+vars04 <- c("amihx", "ca", "cardiohx", "chfhx", "chrpulhx", "dementhx",
+          "gibledhx", "immunhx", "liverhx", "malighx", "psychhx", "renalhx", "transhx")
+
+table1_04 <- 
+    CreateTableOne(vars = vars04, strata = "swang1", 
+                   data = rhc_cleaning, test = FALSE)
+
+print(table1_04, smd = TRUE)
+```
+
+- Seven of these covariates show standardized mean differences larger than 0.10.
+
+## Group 5: Day 1 Summary Measures of Presentation / Severity of Illness (4 covariates)
+
+Variable | Definition               
+-------- | ------------------------------------------------
+`aps1`   | 	APACHE III score ignoring Coma, day 1	
+`das2d3pc`	| DASI (Duke Activity Status Index prior to admission) 
+`scoma1`	| Support Coma score based on Glasgow, day 1 
+`surv2md1`	| SUPPORT model estimate of Prob(surviving 2 months)
+
+```{r covariates_presentation_severity}
+vars05 <- c("aps1", "das2d3pc", "scoma1", "surv2md1")
+
+table1_05 <- 
+    CreateTableOne(vars = vars05, strata = "swang1", 
+                   data = rhc_cleaning, test = FALSE)
+
+print(table1_05, smd = TRUE)
+```
+
+- Three of these covariates show standardized mean differences larger than 0.10.
+
+## Group 6: Day 1 Lab Results (10 covariates)
+
+Variable | Definition               
+-------- | ------------------------------------------------
+`alb1`   | Albumin                  
+`bili1`	 | Bilirubin                
+`crea1`	 | Serum Creatinine         
+`hema1`	 | Hematocrit               
+`paco21` | PaCo2                    
+`pafi1`	 | PaO2\/(.01 FIO2)	        
+`ph1`	  | Serum PH (arterial)	
+`pot1`	 | Serum Potassium	        
+`sod1`	 | Serum Sodium	           
+`wblc1`	 | White blood cell count (4 subjects with value 0)
+
+```{r covariates_day_1_lab_results}
+vars06 <- c("alb1", "bili1", "crea1", "hema1", "paco21",
+            "pafi1", "pot1", "sod1", "wblc1")
+
+table1_06 <- 
+    CreateTableOne(vars = vars06, strata = "swang1", 
+                   data = rhc_cleaning, test = FALSE)
+
+print(table1_06, smd = TRUE)
+```
+
+- Six of these covariates show standardized mean differences larger than 0.10.
+
+So, in all, 31 of the 50 covariates show standardized mean differences that exceed 0.10 before any propensity score adjustment.
+
+# A Little Refactoring
+
+For our outcome, and our treatment, it will be useful to have 1/0 versions of the variables, and it will also be helpful to have the factor versions releveled to put the outcome of interest (death) first and the treatment of interest (RHC) first.
+
+```{r}
+rhc <- rhc_cleaning %>%
+    mutate(treat_rhc = as.numeric(swang1 == "RHC"),
+           swang1 = fct_relevel(swang1, "RHC"),
+           death = fct_relevel(death, "Yes"),
+           died = as.numeric(death == "Yes"))
+```
+
+## Saving the Data File
+
+```{r}
+saveRDS(rhc, here("data", "rhc.Rds"))
+```
+
+# Setting a Seed
+
+I'm going to set a seed for random numbers before we start, which I can change later if I like.
+
+```{r}
+set.seed(5002019)
+```
+
+# Unadjusted Outcome Assessments
+
+Before we estimate a propensity score, we'll perform unadjusted assessments to describe the impact of RHC (or not) on our three outcomes, without adjustment for any covariates at all.
+
+## Outcome A: In-Study Mortality (binary)
+
+```{r}
+rhc %>% tabyl(swang1, death) %>% 
+    adorn_totals() %>%
+    adorn_percentages() %>%
+    adorn_pct_formatting() %>%
+    adorn_ns(position = "front") %>%
+    adorn_title
+```
+
+The odds ratio of death associated with RHC as opposed to No RHC should be larger than 1, specifically, it should be 
+
+\[
+\frac{1486 \times 1315}{2236 \times 698} = 1.25
+\]
+
+Let's see if that's what we get.
+
+### Fitting the Model with the 1/0 treatment and outcome
+
+```{r}
+death_unadj <- glm(died ~ treat_rhc, data = rhc, family = binomial())
+
+death_unadj
+
+tidy(death_unadj, conf.int = TRUE, exponentiate = TRUE)
+```
+
+### Fitting the Model with the treatment and outcome as factors requires care
+
+Alternatively, we could just work with the factors, but then, it's important to be sure what is actually being modeled. Do this by making the outcome and treatment logical results, as follows.
+
+```{r}
+modelA_unadj1 <- glm((death == "Yes") ~ (swang1 == "RHC"), data = rhc, family = binomial())
+
+tidy(modelA_unadj1, conf.int = TRUE, exponentiate = TRUE)
+```
+
+Failing to do this can cause trouble:
+
+```{r}
+modelA_unadj_bad <- glm(death ~ swang1, data = rhc, family = binomial())
+
+tidy(modelA_unadj_bad, conf.int = TRUE, exponentiate = TRUE)
+```
+
+Note that this last version is actually predicting "Death = No" on the basis of "swang1 = No RHC", which can be extremely confusing. 
+
+And if you did this:
+
+```{r}
+modelA_unadj_bad2 <- glm(death ~ swang1 == "RHC", data = rhc, family = binomial())
+
+tidy(modelA_unadj_bad2, conf.int = TRUE, exponentiate = TRUE)
+```
+
+Now, you've inverted the odds ratio! Not good. So, either use 0 and 1 (with 1 being the result you want to study), or use the factors but specify the direction for both treatment and outcome as a logical statement.
+
+## Outcome B: Length of Stay (quantitative)
+
+```{r}
+hospdays_unadj <- lm(hospdays ~ treat_rhc, data = rhc)
+
+hospdays_unadj
+
+tidy(hospdays_unadj, conf.int = TRUE)
+```
+
+
+## Outcome C: Time to death (time-to-event)
+
+Here's the data on `survdays` and `death` for our first six patients:
+
+```{r}
+rhc %>% select(survdays, death) %>% head()
+```
+
+Here, we have a (right-censored) time to event outcome, called `survdays`, and an indicator of censoring (`death` which is "Yes" if the patient's time is real and not censored). So the first subject should have a time to death of 240 or more days, because they were still alive when the study ended, while the second should have a time that is exactly 45 days, because that person died during the study. The survival object we need, then, is:
+
+```{r}
+Surv(rhc$survdays, rhc$death == "Yes") %>% head()
+```
+
+
+```{r}
+survdays_unadj <- coxph(Surv(survdays, death == "Yes") ~ treat_rhc, data = rhc)
+
+survdays_unadj
+
+tidy(survdays_unadj, conf.int = TRUE, exponentiate = TRUE)
+```
+
+# Estimate the Propensity Score with Logistic Regression
+
+```{r}
+propensity_model <- 
+    glm(swang1 == "RHC"  ~ 
+            age + sex + edu + income + ninsclas + race +
+            cat1 + dnr1 + wtkilo1 + hrt1 + meanbp1 + 
+            resp1 + temp1 +
+            card + gastr + hema + meta + neuro + ortho + 
+            renal + resp + seps + trauma +
+            amihx + ca + cardiohx + chfhx + chrpulhx +
+            dementhx + gibledhx + immunhx + liverhx +
+            malighx + psychhx + renalhx + transhx +
+            aps1 + das2d3pc + scoma1 + surv2md1 +
+            alb1 + bili1 + crea1 + hema1 + paco21 + pafi1 +
+            ph1 + pot1 + sod1 + wblc1,
+        family = binomial(link = "logit"), data = rhc)
+```
+
+## Store the propensity scores and linear propensity scores
+
+```{r}
+rhc <- rhc %>%
+    mutate(ps = fitted(propensity_model),
+           linps = propensity_model$linear.predictors)
+
+rhc %>% select(ptid, ps, linps) %>% head()
+```
+
+## Plot the Propensity Scores to Verify that they Match Your Expectations
+
+```{r}
+ggplot(rhc, aes(x = ps, fill = swang1)) +
+    geom_density(alpha = 0.5) +
+    scale_fill_viridis_d(option = "plasma") +
+    theme_bw()
+```
+
+```{r}
+ggplot(rhc, aes(x = swang1, y = ps)) +
+    geom_violin(aes(fill = swang1)) + 
+    geom_boxplot(width = 0.2) +
+    scale_fill_viridis_d(option = "plasma") + 
+    guides(fill = FALSE) + 
+    coord_flip() +
+    theme_bw()
+```
+
+OK. We're trying to use `ps` to estimate the probability of having a RHC, and it looks the people who actually had RHC have higher PS, on average, so that's promising.
+
+# Checking Rubin's Rules Prior to Propensity Adjustment
+
+Rubin Rule 1 result should ideally be near 0, and certainly between -50 and +50.
+
+```{r}
+rubin1.unadj <- with(rhc, 
+                  abs(100*(mean(linps[swang1=="RHC"]) - 
+                               mean(linps[swang1=="No RHC"]))/
+                          sd(linps)))
+rubin1.unadj
+```
+
+Rubin Rule 2 result should ideally be near 1, and certainly between 1/2 and 2.
+
+```{r}
+rubin2.unadj <- with(rhc, 
+                  var(linps[swang1 == "RHC"]) / 
+                      var(linps[swang1 == "No RHC"]))
+rubin2.unadj
+```
+
+So, we've got some work to do. Let's try matching. In several different ways.
+
+# Match 1: 1:1 Greedy Matching on the linear PS, without Replacement
+
+```{r}
+X <- rhc$linps
+Tr <- as.logical(rhc$swang1 == "RHC")
+match1 <- Match(Tr = Tr, X = X, M = 1, 
+                estimand = "ATT", replace = FALSE, 
+                ties = FALSE)
+summary(match1)
+```
+
+
+
+## Love Plot for Match 1
+
+```{r, fig.height = 8}
+b1 <- bal.tab(match1, 
+              swang1 == "RHC"  ~ 
+                  age + sex + edu + income + ninsclas + race +
+                  cat1 + dnr1 + wtkilo1 + hrt1 + meanbp1 + 
+                  resp1 + temp1 +
+                  card + gastr + hema + meta + neuro + ortho + 
+                  renal + resp + seps + trauma +
+                  amihx + ca + cardiohx + chfhx + chrpulhx +
+                  dementhx + gibledhx + immunhx + liverhx +
+                  malighx + psychhx + renalhx + transhx +
+                  aps1 + das2d3pc + scoma1 + surv2md1 +
+                  alb1 + bili1 + crea1 + hema1 + paco21 + pafi1 +
+                  ph1 + pot1 + sod1 + wblc1 + ps + linps,
+              data=rhc, un = TRUE)
+
+love.plot(b1, threshold = .1, size = 1.5,
+               var.order = "unadjusted",
+               title = "Standardized Differences and Match 1") +
+    theme_bw()
+```
+
+## Rubin's Rules 1 and 2 for Match 1
+
+Create a new data frame, containing only the matched sample.
+
+```{r}
+matches_1 <- factor(rep(match1$index.treated, 2))
+rhc.matches_1 <- cbind(matches_1, 
+          rhc[c(match1$index.control, match1$index.treated),])
+```
+
+Rubin Rule 1 result after matching should ideally be near 0, and certainly between -50 and +50.
+
+```{r}
+rubin1.m1 <- with(rhc.matches_1, 
+                  abs(100*(mean(linps[swang1=="RHC"]) - 
+                               mean(linps[swang1=="No RHC"]))/
+                          sd(linps)))
+rubin1.m1
+```
+
+Rubin Rule 2 result after matching should ideally be near 1, and certainly between 1/2 and 2.
+
+```{r}
+rubin2.m1 <- with(rhc.matches_1, 
+                  var(linps[swang1 == "RHC"]) / 
+                      var(linps[swang1 == "No RHC"]))
+rubin2.m1
+```
+
+# Match 2: 1:2 Greedy Matching on the linear PS, without Replacement
+
+```{r}
+X <- rhc$linps
+Tr <- as.logical(rhc$swang1 == "RHC")
+match2 <- Match(Tr = Tr, X = X, M = 2, 
+                estimand = "ATT", replace = FALSE, 
+                ties = FALSE)
+summary(match2)
+```
+
+## Love Plot for Match 2
+
+```{r, fig.height = 8}
+b2 <- bal.tab(match2, 
+              swang1 == "RHC"  ~ 
+                  age + sex + edu + income + ninsclas + race +
+                  cat1 + dnr1 + wtkilo1 + hrt1 + meanbp1 + 
+                  resp1 + temp1 +
+                  card + gastr + hema + meta + neuro + ortho + 
+                  renal + resp + seps + trauma +
+                  amihx + ca + cardiohx + chfhx + chrpulhx +
+                  dementhx + gibledhx + immunhx + liverhx +
+                  malighx + psychhx + renalhx + transhx +
+                  aps1 + das2d3pc + scoma1 + surv2md1 +
+                  alb1 + bili1 + crea1 + hema1 + paco21 + pafi1 +
+                  ph1 + pot1 + sod1 + wblc1 + ps + linps,
+              data=rhc, un = TRUE)
+
+love.plot(b2, threshold = .1, size = 1.5,
+               var.order = "unadjusted",
+               title = "Standardized Differences and Match 2") +
+    theme_bw()
+```
+
+## Rubin's Rules 1 and 2 for Match 2
+
+Create a new data frame, containing only the matched sample.
+
+```{r}
+matches_2 <- factor(rep(match2$index.treated, 2))
+rhc.matches_2 <- cbind(matches_2, 
+          rhc[c(match2$index.control, match2$index.treated),])
+```
+
+Rubin Rule 1 result after matching should ideally be near 0, and certainly between -50 and +50.
+
+```{r}
+rubin1.m2 <- with(rhc.matches_2, 
+                  abs(100*(mean(linps[swang1=="RHC"]) - 
+                               mean(linps[swang1=="No RHC"]))/
+                          sd(linps)))
+rubin1.m2
+```
+
+Rubin Rule 2 result after matching should ideally be near 1, and certainly between 1/2 and 2.
+
+```{r}
+rubin2.m2 <- with(rhc.matches_2, 
+                  var(linps[swang1 == "RHC"]) / 
+                      var(linps[swang1 == "No RHC"]))
+rubin2.m2
+```
+
+
+# Match 3: Genetic Search Matching to do 1:1 Matching without replacement
+
+The `GenMatch` function finds optimal balance using multivariate matching where a genetic search algorithm determines the weight that each covariate is given.
+
+Please note that I am using way too small values of `pop.size` (especially) and probably `max.generations`, too, so that things run quickly. I am also only matching on the propensity score and linear propensity score, rather than on the individual covariates. For a course project, I recommend you try matching on the individual covariates if you can, but this reduction in the paramater values is fine. 
+
+For actual publications, follow the recommendations of the `GenMatch` algorithm, as described in the `Matching` and `genoud` package help files. The default values (which may be too small themselves) are 100 for both `pop.size` and `max.generations`.
+
+```{r}
+X <- cbind(rhc$linps, rhc$ps)
+Tr <- as.logical(rhc$swang1 == "RHC")
+genout3 <- GenMatch(Tr = Tr, X = X,
+                    estimand = "ATT", M = 1,
+                    pop.size = 10, max.generations = 10,
+                    wait.generations = 4, verbose = FALSE)
+match3 <- Match(Tr = Tr, X = X, estimand = "ATT", 
+                 Weight.matrix = genout3)
+summary(match3)
+```
+
+## Love Plot for Match 3
+
+```{r, fig.height = 8}
+b3 <- bal.tab(match3, 
+              swang1 == "RHC"  ~ 
+                  age + sex + edu + income + ninsclas + race +
+                  cat1 + dnr1 + wtkilo1 + hrt1 + meanbp1 + 
+                  resp1 + temp1 +
+                  card + gastr + hema + meta + neuro + ortho + 
+                  renal + resp + seps + trauma +
+                  amihx + ca + cardiohx + chfhx + chrpulhx +
+                  dementhx + gibledhx + immunhx + liverhx +
+                  malighx + psychhx + renalhx + transhx +
+                  aps1 + das2d3pc + scoma1 + surv2md1 +
+                  alb1 + bili1 + crea1 + hema1 + paco21 + pafi1 +
+                  ph1 + pot1 + sod1 + wblc1 + ps + linps,
+              data=rhc, un = TRUE)
+
+love.plot(b3, threshold = .1, size = 1.5,
+               var.order = "unadjusted",
+               title = "Standardized Differences and Match 3") +
+    theme_bw()
+```
+
+## Rubin's Rules 1 and 2 for Match 3
+
+Create a new data frame, containing only the matched sample.
+
+```{r}
+matches_3 <- factor(rep(match3$index.treated, 2))
+rhc.matches_3 <- cbind(matches_3, 
+          rhc[c(match3$index.control, match3$index.treated),])
+```
+
+Rubin Rule 1 result after matching should ideally be near 0, and certainly between -50 and +50.
+
+```{r}
+rubin1.m3 <- with(rhc.matches_3, 
+                  abs(100*(mean(linps[swang1=="RHC"]) - 
+                               mean(linps[swang1=="No RHC"]))/
+                          sd(linps)))
+rubin1.m3
+```
+
+Rubin Rule 2 result after matching should ideally be near 1, and certainly between 1/2 and 2.
+
+```{r}
+rubin2.m3 <- with(rhc.matches_3, 
+                  var(linps[swang1 == "RHC"]) / 
+                      var(linps[swang1 == "No RHC"]))
+rubin2.m3
+```
+
+
+
+# Match 4: 1:1 Greedy Matching on the linear PS, WITH Replacement
+
+```{r}
+X <- rhc$linps
+Tr <- as.logical(rhc$swang1 == "RHC")
+match4 <- Match(Tr = Tr, X = X, M = 1, 
+                estimand = "ATT", replace = TRUE, 
+                ties = FALSE)
+summary(match4)
+```
+
+## Love Plot for Match 4
+
+```{r, fig.height = 8}
+b4 <- bal.tab(match4, 
+              swang1 == "RHC"  ~ 
+                  age + sex + edu + income + ninsclas + race +
+                  cat1 + dnr1 + wtkilo1 + hrt1 + meanbp1 + 
+                  resp1 + temp1 +
+                  card + gastr + hema + meta + neuro + ortho + 
+                  renal + resp + seps + trauma +
+                  amihx + ca + cardiohx + chfhx + chrpulhx +
+                  dementhx + gibledhx + immunhx + liverhx +
+                  malighx + psychhx + renalhx + transhx +
+                  aps1 + das2d3pc + scoma1 + surv2md1 +
+                  alb1 + bili1 + crea1 + hema1 + paco21 + pafi1 +
+                  ph1 + pot1 + sod1 + wblc1 + ps + linps,
+              data=rhc, un = TRUE)
+
+love.plot(b4, threshold = .1, size = 1.5,
+               var.order = "unadjusted",
+               title = "Standardized Differences and Match 4") +
+    theme_bw()
+```
+
+## Rubin's Rules 1 and 2 for Match 4
+
+Create a new data frame, containing only the matched sample.
+
+```{r}
+matches_4 <- factor(rep(match4$index.treated, 2))
+rhc.matches_4 <- cbind(matches_4, 
+          rhc[c(match4$index.control, match4$index.treated),])
+```
+
+Rubin Rule 1 result after matching should ideally be near 0, and certainly between -50 and +50.
+
+```{r}
+rubin1.m4 <- with(rhc.matches_4, 
+                  abs(100*(mean(linps[swang1=="RHC"]) - 
+                               mean(linps[swang1=="No RHC"]))/
+                          sd(linps)))
+rubin1.m4
+```
+
+Rubin Rule 2 result after matching should ideally be near 1, and certainly between 1/2 and 2.
+
+```{r}
+rubin2.m4 <- with(rhc.matches_4, 
+                  var(linps[swang1 == "RHC"]) / 
+                      var(linps[swang1 == "No RHC"]))
+rubin2.m4
+```
+
+
+
+# Match 5: 1:1 Caliper Matching on the linear PS, WITHOUT Replacement
+
+```{r}
+X <- rhc$linps
+Tr <- as.logical(rhc$swang1 == "RHC")
+match5 <- Match(Tr = Tr, X = X, M = 1, 
+                caliper = 0.2,
+                estimand = "ATT", replace = FALSE, 
+                ties = FALSE)
+summary(match5)
+```
+
+## Love Plot for Match 5
+
+```{r, fig.height = 8}
+b5 <- bal.tab(match5, 
+              swang1 == "RHC"  ~ 
+                  age + sex + edu + income + ninsclas + race +
+                  cat1 + dnr1 + wtkilo1 + hrt1 + meanbp1 + 
+                  resp1 + temp1 +
+                  card + gastr + hema + meta + neuro + ortho + 
+                  renal + resp + seps + trauma +
+                  amihx + ca + cardiohx + chfhx + chrpulhx +
+                  dementhx + gibledhx + immunhx + liverhx +
+                  malighx + psychhx + renalhx + transhx +
+                  aps1 + das2d3pc + scoma1 + surv2md1 +
+                  alb1 + bili1 + crea1 + hema1 + paco21 + pafi1 +
+                  ph1 + pot1 + sod1 + wblc1 + ps + linps,
+              data=rhc, un = TRUE)
+
+love.plot(b5, threshold = .1, size = 1.5,
+               var.order = "unadjusted",
+               title = "Standardized Differences and Match 5") +
+    theme_bw()
+```
+
+## Rubin's Rules 1 and 2 for Match 5
+
+Create a new data frame, containing only the matched sample.
+
+```{r}
+matches_5 <- factor(rep(match5$index.treated, 2))
+rhc.matches_5 <- cbind(matches_5, 
+          rhc[c(match5$index.control, match5$index.treated),])
+```
+
+Rubin Rule 1 result after matching should ideally be near 0, and certainly between -50 and +50.
+
+```{r}
+rubin1.m5 <- with(rhc.matches_5, 
+                  abs(100*(mean(linps[swang1=="RHC"]) - 
+                               mean(linps[swang1=="No RHC"]))/
+                          sd(linps)))
+rubin1.m5
+```
+
+Rubin Rule 2 result after matching should ideally be near 1, and certainly between 1/2 and 2.
+
+```{r}
+rubin2.m5 <- with(rhc.matches_5, 
+                  var(linps[swang1 == "RHC"]) / 
+                      var(linps[swang1 == "No RHC"]))
+rubin2.m5
+```
+
+# Match 6: 1:2 Greedy Matching on the linear PS, WITH Replacement
+
+```{r}
+X <- rhc$linps
+Tr <- as.logical(rhc$swang1 == "RHC")
+match6 <- Match(Tr = Tr, X = X, M = 2, 
+                estimand = "ATT", replace = TRUE, 
+                ties = FALSE)
+summary(match6)
+```
+
+## Love Plot for Match 6
+
+```{r, fig.height = 8}
+b6 <- bal.tab(match6, 
+              swang1 == "RHC"  ~ 
+                  age + sex + edu + income + ninsclas + race +
+                  cat1 + dnr1 + wtkilo1 + hrt1 + meanbp1 + 
+                  resp1 + temp1 +
+                  card + gastr + hema + meta + neuro + ortho + 
+                  renal + resp + seps + trauma +
+                  amihx + ca + cardiohx + chfhx + chrpulhx +
+                  dementhx + gibledhx + immunhx + liverhx +
+                  malighx + psychhx + renalhx + transhx +
+                  aps1 + das2d3pc + scoma1 + surv2md1 +
+                  alb1 + bili1 + crea1 + hema1 + paco21 + pafi1 +
+                  ph1 + pot1 + sod1 + wblc1 + ps + linps,
+              data=rhc, un = TRUE)
+
+love.plot(b6, threshold = .1, size = 1.5,
+               var.order = "unadjusted",
+               title = "Standardized Differences and Match 6") +
+    theme_bw()
+```
+
+## Rubin's Rules 1 and 2 for Match 6
+
+Create a new data frame, containing only the matched sample.
+
+```{r}
+matches_6 <- factor(rep(match6$index.treated, 2))
+rhc.matches_6 <- cbind(matches_6, 
+          rhc[c(match6$index.control, match6$index.treated),])
+```
+
+Rubin Rule 1 result after matching should ideally be near 0, and certainly between -50 and +50.
+
+```{r}
+rubin1.m6 <- with(rhc.matches_6, 
+                  abs(100*(mean(linps[swang1=="RHC"]) - 
+                               mean(linps[swang1=="No RHC"]))/
+                          sd(linps)))
+rubin1.m6
+```
+
+Rubin Rule 2 result after matching should ideally be near 1, and certainly between 1/2 and 2.
+
+```{r}
+rubin2.m6 <- with(rhc.matches_6, 
+                  var(linps[swang1 == "RHC"]) / 
+                      var(linps[swang1 == "No RHC"]))
+rubin2.m6
+```
+
+# Ranking the Matches
+
+Match | Rubin 1 | Rubin 2 | Love Plot | Matched Sets | Description
+-----: | ------: | -----: | --------- | -------: | -------------------------
+None | `r round_half_up(rubin1.unadj,1)` | `r round_half_up(rubin2.unadj,2)` | -- | -- |  No Matching
+1 | `r round_half_up(rubin1.m1, 1)` | `r round_half_up(rubin2.m1, 2)` | Pretty Bad | 2,184 | 1:1 greedy w/o repl
+2 | `r round_half_up(rubin1.m2, 1)` | `r round_half_up(rubin2.m2, 2)` | Dreadful | 1,775 | 1:2 greedy w/o repl
+3 | `r round_half_up(rubin1.m3, 1)` | `r round_half_up(rubin2.m3, 2)` | Very Good | 2,184 | Genetic Search 1:1 w/o repl
+4 | `r round_half_up(rubin1.m4, 1)` | `r round_half_up(rubin2.m4, 2)` | Very Good | 2,184 | 1:1 greedy with repl
+5 | `r round_half_up(rubin1.m5, 1)` | `r round_half_up(rubin2.m5, 2)` | Very Good | 1,562 | 1:1 caliper without repl
+6 | `r round_half_up(rubin1.m6, 1)` | `r round_half_up(rubin2.m6, 2)` | Very Good | 2,184 | 1:2 greedy with repl
+
+
+# ATT Matching Estimates for the Binary Outcome, Death
+
+## With Match 1, in detail
+
+Note that the variable which identifies the matches (called `matches_1`) is set up as a factor, as it needs to be, and that I'm using the 1/0 versions of both the outcome (so `died` rather than `death`) and treatment (so `treat_rhc` rather than `swang1`).
+
+```{r}
+death_adj_m1 <- clogit(died ~ treat_rhc + strata(matches_1), data = rhc.matches_1)
+
+summary(death_adj_m1)
+```
+
+The odds ratio in the `exp(coef)` section above is the average causal effect estimate. It describes the odds of having an event (`died`) occur associated with being a RHC subject (as identified by `treat_rhc`), as compared to the odds of that event when a non-RHC subject. We can tidy this with:
+
+```{r}
+tidy(death_adj_m1, exponentiate = TRUE, conf.level = 0.95)
+```
+
+## With Matches 2-6, in much less detail
+
+```{r}
+death_adj_m2 <- clogit(died ~ treat_rhc + strata(matches_2), data = rhc.matches_2)
+tidy(death_adj_m2, exponentiate = TRUE, conf.level = 0.95)
+```
+
+```{r}
+death_adj_m3 <- clogit(died ~ treat_rhc + strata(matches_3), data = rhc.matches_3)
+tidy(death_adj_m3, exponentiate = TRUE, conf.level = 0.95)
+```
+
+```{r}
+death_adj_m4 <- clogit(died ~ treat_rhc + strata(matches_4), data = rhc.matches_4)
+tidy(death_adj_m4, exponentiate = TRUE, conf.level = 0.95)
+```
+
+```{r}
+death_adj_m5 <- clogit(died ~ treat_rhc + strata(matches_5), data = rhc.matches_5)
+tidy(death_adj_m5, exponentiate = TRUE, conf.level = 0.95)
+```
+
+```{r}
+death_adj_m6 <- clogit(died ~ treat_rhc + strata(matches_6), data = rhc.matches_6)
+tidy(death_adj_m6, exponentiate = TRUE, conf.level = 0.95)
+```
+
+## Graphing the Results Across Multiple Matching Strategies
+
+```{r}
+temp0 <- tidy(death_unadj, conf.int = TRUE, exponentiate = TRUE) %>% 
+    filter(term == "treat_rhc")
+temp1 <- tidy(death_adj_m1, exponentiate = TRUE, conf.int = T, conf.level = 0.95)
+temp2 <- tidy(death_adj_m2, exponentiate = TRUE, conf.int = T, conf.level = 0.95)
+temp3 <- tidy(death_adj_m3, exponentiate = TRUE, conf.int = T, conf.level = 0.95)
+temp4 <- tidy(death_adj_m4, exponentiate = TRUE, conf.int = T, conf.level = 0.95)
+temp5 <- tidy(death_adj_m5, exponentiate = TRUE, conf.int = T, conf.level = 0.95)
+temp6 <- tidy(death_adj_m6, exponentiate = TRUE, conf.int = T, conf.level = 0.95)
+
+death_match_results <- rbind(temp0, temp1, temp2, temp3, temp4, temp5, temp6)
+
+death_match_results <- death_match_results %>%
+    mutate(approach = c("Unmatched", "Match 1", "Match 2", "Match 3", "Match 4", "Match 5", "Match 6")) %>%
+    mutate(description = c("No Matching", "1:1 greedy matching without replacement", 
+                           "1:2 greedy matching without replacement",
+                           "1:1 genetic search matching without replacement",
+                           "1:1 greedy matching with replacement",
+                           "1:1 caliper matching on the linear PS without replacement",
+                           "1:2 greedy matching with replacement"))
+
+death_match_results
+```
+
+```{r}
+ggplot(death_match_results, aes(x = approach, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
+    geom_pointrange() +
+    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    theme_bw() +
+    coord_flip() +
+    labs(title = "Comparing ATT Estimates for Death using RHC Propensity Matching",
+         x = "Propensity Adjustment Approach", 
+         y = "Estimated Odds Ratio for Death associated with RHC")
+```
+
+Let's look at just the four strategies that achieved stronger balance.
+
+```{r}
+death_match_results %>%
+    filter(approach %in% c("Match 3", "Match 4", "Match 5", "Match 6")) %>%
+ggplot(., aes(x = description, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
+    geom_pointrange() +
+    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    theme_bw() +
+    coord_flip() +
+    labs(title = "ATT Matching Estimates in RHC (Death)",
+         x = "Propensity Adjustment Approach", 
+         y = "Estimated Odds Ratio for Death associated with RHC")
+```
+
+# ATT Matching Estimates for the Quantitative Outcome, Hospital Length of Stay
+
+## With Match 1, in detail
+
+Again, the variable which identifies the matches (called `matches_1`) is set up as a factor, as it needs to be, and that I'm using the 1/0 version of treatment (so `treat_rhc` rather than `swang1`). 
+
+Our result for this quantitative outcome (`hospdays`) comes from a mixed model where the matches are treated as a random factor, but the treatment group is treated as a fixed factor, using the `lme4` package.
+
+```{r}
+hospdays_adj_m1 <- lmer(hospdays ~ treat_rhc + (1 | matches_1),
+                        data = rhc.matches_1)
+
+summary(hospdays_adj_m1); confint(hospdays_adj_m1)
+```
+
+The estimated effect of `treat_rhc` in the fixed effects section, combined with the 95% confidence intervals material, provides the average causal effect estimate. It describes the change in the outcome `hospdays` associated with being a RHC subject (as identified by `treat_rhc`), as compared to being a non-RHC subject. We can tidy this with:
+
+```{r, message = FALSE}
+broom.mixed::tidy(hospdays_adj_m1, conf.int = TRUE, conf.level = 0.95)
+```
+
+or more specifically, we can look at just the treatment effect with:
+
+```{r, message = FALSE}
+broom.mixed::tidy(hospdays_adj_m1, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc")
+```
+
+## With Matches 2-6, in much less detail
+
+```{r}
+hospdays_adj_m2 <- lmer(hospdays ~ treat_rhc + (1 | matches_2),
+                        data = rhc.matches_2)
+broom.mixed::tidy(hospdays_adj_m2, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc")
+```
+
+```{r}
+hospdays_adj_m3 <- lmer(hospdays ~ treat_rhc + (1 | matches_3),
+                        data = rhc.matches_3)
+broom.mixed::tidy(hospdays_adj_m3, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc")
+```
+
+```{r}
+hospdays_adj_m4 <- lmer(hospdays ~ treat_rhc + (1 | matches_4),
+                        data = rhc.matches_4)
+broom.mixed::tidy(hospdays_adj_m4, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc")
+```
+
+```{r}
+hospdays_adj_m5 <- lmer(hospdays ~ treat_rhc + (1 | matches_5),
+                        data = rhc.matches_5)
+broom.mixed::tidy(hospdays_adj_m5, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc")
+```
+
+```{r}
+hospdays_adj_m6 <- lmer(hospdays ~ treat_rhc + (1 | matches_6),
+                        data = rhc.matches_6)
+broom.mixed::tidy(hospdays_adj_m6, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc")
+```
+
+## Graphing the Results Across Multiple Matching Strategies
+
+```{r}
+temp0 <- tidy(hospdays_unadj, conf.int = TRUE) %>% 
+    filter(term == "treat_rhc") %>% 
+    select(term, estimate, std.error, conf.low, conf.high)
+
+temp1 <- tidy(hospdays_adj_m1, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc") %>% 
+    select(term, estimate, std.error, conf.low, conf.high)
+
+temp2 <- tidy(hospdays_adj_m2, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc") %>% 
+    select(term, estimate, std.error, conf.low, conf.high)
+
+temp3 <- tidy(hospdays_adj_m3, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc") %>% 
+    select(term, estimate, std.error, conf.low, conf.high)
+
+temp4 <- tidy(hospdays_adj_m4, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc") %>% 
+    select(term, estimate, std.error, conf.low, conf.high)
+
+temp5 <- tidy(hospdays_adj_m5, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc") %>% 
+    select(term, estimate, std.error, conf.low, conf.high)
+
+temp6 <- tidy(hospdays_adj_m6, conf.int = TRUE, conf.level = 0.95) %>% 
+    filter(term == "treat_rhc") %>% 
+    select(term, estimate, std.error, conf.low, conf.high)
+
+hospdays_match_results <- rbind(temp0, temp1, temp2, temp3, temp4, temp5, temp6)
+
+hospdays_match_results <- hospdays_match_results %>%
+    mutate(approach = c("Unmatched", "Match 1", "Match 2", "Match 3", "Match 4", "Match 5", "Match 6")) %>%
+    mutate(description = c("No Matching", "1:1 greedy matching without replacement", 
+                           "1:2 greedy matching without replacement",
+                           "1:1 genetic search matching without replacement",
+                           "1:1 greedy matching with replacement",
+                           "1:1 caliper matching on the linear PS without replacement",
+                           "1:2 greedy matching with replacement"))
+
+hospdays_match_results
+```
+
+
+```{r}
+ggplot(hospdays_match_results, aes(x = approach, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
+    geom_pointrange() +
+    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    theme_bw() +
+    coord_flip() +
+    labs(title = "Comparing ATT Estimates for LOS using RHC Propensity Matching",
+         x = "Propensity Adjustment Approach", 
+         y = "Estimated Change in Hospital Length of Stay associated with RHC")
+```
+
+Let's look at just the four strategies that achieved stronger balance.
+
+```{r}
+hospdays_match_results %>%
+    filter(approach %in% c("Match 3", "Match 4", "Match 5", "Match 6")) %>%
+ggplot(., aes(x = description, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
+    geom_pointrange() +
+    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    theme_bw() +
+    coord_flip() +
+    labs(title = "ATT Matching Estimates in RHC (LOS)",
+         x = "Propensity Adjustment Approach", 
+         y = "Est. Change in Hospital LOS associated with RHC")
+```
+
+
+# ATT Matching Estimates for the Time-to-Event Outcome, In-Study Survival
+
+We'll use a stratified Cox proportional hazards model to compare the RHC/No RHC groups on our time-to-event outcome `survdays`, while accounting for the matched pairs. The main result will be a relative hazard rate estimate, with 95% CI. I will use the 0/1 numeric versions of the event indicator (`died`), and of the treatment indicator (`treat_rhc`).
+
+## With Match 1, in detail
+
+```{r}
+survdays_adj_m1 <- coxph(Surv(survdays, died) ~ treat_rhc + strata(matches_1), data=rhc.matches_1)
+summary(survdays_adj_m1)
+```
+
+The hazard ratio in the `exp(coef)` section is the average causal effect estimate. It describes the hazard for having an event (`died`) occur associated with being a RHC subject (as identified by `treat_rhc`), as compared to the hazard of that event when a non-RHC subject. We can tidy this with:
+
+```{r}
+tidy(survdays_adj_m1, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+```
+
+## With Matches 2-6, in much less detail
+
+```{r}
+survdays_adj_m2 <- coxph(Surv(survdays, died) ~ treat_rhc + strata(matches_2), data=rhc.matches_2)
+tidy(survdays_adj_m2, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+```
+
+```{r}
+survdays_adj_m3 <- coxph(Surv(survdays, died) ~ treat_rhc + strata(matches_3), data=rhc.matches_3)
+tidy(survdays_adj_m3, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+```
+
+```{r}
+survdays_adj_m4 <- coxph(Surv(survdays, died) ~ treat_rhc + strata(matches_4), data=rhc.matches_4)
+tidy(survdays_adj_m4, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+```
+
+```{r}
+survdays_adj_m5 <- coxph(Surv(survdays, died) ~ treat_rhc + strata(matches_5), data=rhc.matches_5)
+tidy(survdays_adj_m5, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+```
+
+```{r}
+survdays_adj_m6 <- coxph(Surv(survdays, died) ~ treat_rhc + strata(matches_6), data=rhc.matches_6)
+tidy(survdays_adj_m6, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+```
+
+
+## Graphing the Results Across Multiple Matching Strategies
+
+```{r}
+temp0 <- tidy(survdays_unadj, conf.int = TRUE, exponentiate = TRUE)
+
+temp1 <- tidy(survdays_adj_m1, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+
+temp2 <- tidy(survdays_adj_m2, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+
+temp3 <- tidy(survdays_adj_m3, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+
+temp4 <- tidy(survdays_adj_m4, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+
+temp5 <- tidy(survdays_adj_m5, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+
+temp6 <- tidy(survdays_adj_m6, exponentiate = TRUE, conf.int = TRUE, conf.level = 0.95)
+
+
+survdays_match_results <- rbind(temp0, temp1, temp2, temp3, temp4, temp5, temp6)
+
+survdays_match_results <- survdays_match_results %>%
+    mutate(approach = c("Unmatched", "Match 1", "Match 2", "Match 3", "Match 4", "Match 5", "Match 6")) %>%
+    mutate(description = c("No Matching", "1:1 greedy matching without replacement", 
+                           "1:2 greedy matching without replacement",
+                           "1:1 genetic search matching without replacement",
+                           "1:1 greedy matching with replacement",
+                           "1:1 caliper matching on the linear PS without replacement",
+                           "1:2 greedy matching with replacement"))
+
+survdays_match_results
+```
+
+
+```{r}
+ggplot(survdays_match_results, aes(x = approach, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
+    geom_pointrange() +
+    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    theme_bw() +
+    coord_flip() +
+    labs(title = "Comparing ATT Estimates for Survival using RHC Propensity Matching",
+         x = "Propensity Adjustment Approach", 
+         y = "Estimated Hazard Ratio associated with RHC")
+```
+
+Let's look at just the four strategies that achieved stronger balance.
+
+```{r}
+survdays_match_results %>%
+    filter(approach %in% c("Match 3", "Match 4", "Match 5", "Match 6")) %>%
+ggplot(., aes(x = description, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
+    geom_pointrange() +
+    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    theme_bw() +
+    coord_flip() +
+    labs(title = "ATT Matching Estimates in RHC (Survival)",
+         x = "Propensity Adjustment Approach", 
+         y = "Estimated Hazard Ratio associated with RHC")
+```
+
+
+# Sensitivity Analyses
+
+## For the Binary Outcome, Death
+
+The `rbounds` package can evaluate binary outcomes using the `binarysens` and `Fishersens` functions. The `binarysens` function works directly on a matched sample as developed using the Matching package. For example, in our third match, based on the genetic search algorithm with 1:1 matching without replacement, this is `match3`. Note that in order to do this, we needed to run `match3` including the appropriate (binary) outcome (Y).
+
+```{r}
+Y <- rhc$died
+X <- cbind(rhc$linps, rhc$ps)
+Tr <- as.logical(rhc$swang1 == "RHC")
+match3 <- Match(Y = Y, Tr = Tr, X = X, estimand = "ATT", 
+                 Weight.matrix = genout3)
+binarysens(match3, Gamma = 1.5, GammaInc = 0.05)
+```
+
+At a 5% significance level, we retain significance up to a hidden bias of $\Gamma$ = 1.15, but not at $\Gamma$ = 1.2. See the `toy_2019` example discussed in Class 4, as well as Chapter 9 of Rosenbaum's *Observation and Experiment* for more details on interpretation of this result.
+
+We can also use this approach with other Matching results, including Match 6, which is a 1:2 match with replacement. Again, we have to run the match with the appropriate outcome included.
+
+```{r}
+Y <- rhc$died
+X <- rhc$linps
+Tr <- as.logical(rhc$swang1 == "RHC")
+match6 <- Match(Y = Y, Tr = Tr, X = X, M = 2, 
+                estimand = "ATT", replace = TRUE, 
+                ties = FALSE)
+
+binarysens(match6, Gamma = 1.5, GammaInc = 0.05)
+```
+
+Here, at a 5% significance level, we retain significance up to a hidden bias of $\Gamma$ = 1.15, but not at $\Gamma$ = 1.20.
+
+## For the Quantitative Outcome, In-Hospital Length of Stay
+
+We have already used the `Match` function from the Matching package to develop our matched samples. For our 1:1 matches, we need only run the `psens` function from the `rbounds` package to obtain sensitivity results. For example, in Match 3,
+
+```{r}
+Y <- rhc$hospdays
+X <- cbind(rhc$linps, rhc$ps)
+Tr <- as.logical(rhc$swang1 == "RHC")
+match3 <- Match(Y = Y, Tr = Tr, X = X, estimand = "ATT", 
+                 Weight.matrix = genout3)
+psens(match3, Gamma = 1.5, GammaInc = 0.1)
+```
+
+At a 5% significance level, we retain significance up to a hidden bias of $\Gamma$ = 1.1, but not at $\Gamma$ = 1.2. See the `toy_2019` example discussed in Class 4, as well as Chapter 9 of Rosenbaum's *Observation and Experiment* for more details on interpretation of this result.
+
+For a matching with more than 1 control, we need to apply the `mcontrol` function, which requires the use of the `data.prep` function from `rbounds`. So, for example, in Match 6, which is a 1:2 greedy match (so that each matched set has 3 patients in it, making the `group.size` = 3), we would have:
+
+```{r}
+Y <- rhc$hospdays
+X <- rhc$linps
+Tr <- as.logical(rhc$swang1 == "RHC")
+match6 <- Match(Y = Y, Tr = Tr, X = X, M = 2, 
+                estimand = "ATT", replace = TRUE, 
+                ties = FALSE)
+
+tmp <- data.prep(match6, group.size = 3)
+
+mcontrol(tmp$Y, tmp$id, tmp$treat, group.size=3, Gamma = 1.5, GammaInc = 0.1)
+```
+
+Again, at a 5% significance level, we retain significance up to a hidden bias of $\Gamma$ = 1.1, but not at $\Gamma$ = 1.2.
+
+## For the Survival Outcome, In-Study Time to Death
+
+In this setting, we would need to use the spreadsheet software provided by Dr. Love. That software is designed only for 1:1 greedy matching without replacement or weighting, which is the approach we took in Match 1 (we could also have looked at matching using a caliper, but without replacement.) We need to identify, for each matched pair of subjects, whether that pair's set of results was:
+
+- that the RHC patient definitely survived longer than the non-RHC patient
+- that the non-RHC patient definitely survived longer than the RHC patient
+- that it is unclear which patient survived longer, due to censoring
+
+Here is some very fussy code that accomplishes this counting. This could probably be accomplished just as well with some sort of `case_when` statement, but it's a bit tricky.
+
+```{r}
+a1 <- rhc.matches_1 %>% 
+    select(matches_1, swang1, death, survdays) %>%
+    arrange(matches_1) 
+```
+
+```{r}
+a2 <- unite(a1, situation, swang1, death, sep = "_", remove = TRUE)
+
+a3 <- spread(a2, situation, survdays)
+
+a4 <- a3 %>%
+    filter(complete.cases(`No RHC_Yes`, `RHC_Yes`)) %>%
+    mutate(result = ifelse(`RHC_Yes` > `No RHC_Yes`, "RHC lived longer", "No RHC lived longer"))
+
+a5 <- a3 %>%
+    filter(complete.cases(`No RHC_No`, `RHC_No`)) %>%
+    mutate(result = "No clear winner")
+
+a6 <- a3 %>%
+    filter(complete.cases(`No RHC_No`, `RHC_Yes`)) %>%
+    mutate(result = ifelse(`RHC_Yes` > `No RHC_No`, "No clear winner", "No RHC lived longer"))
+
+a7 <- a3 %>%
+    filter(complete.cases(`No RHC_Yes`, `RHC_No`)) %>%
+    mutate(result = ifelse(`RHC_No` > `No RHC_Yes`, "RHC lived longer", "No clear winner"))
+
+a8 <- bind_rows(a4, a5, a6, a7)
+
+a8 %>% tabyl(result) %>% adorn_totals()
+```
+
+So we have counts for the pairs where a clear winner is identified, and we can enter the spreadsheet. We need the number of pairs with a clear winner, and the number of pairs where the No RHC patient lived longer than the RHC patient.
+
+# Session Information
+
+```{r}
+xfun::session_info()
+```
