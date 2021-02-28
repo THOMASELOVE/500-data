@@ -1,6 +1,6 @@
 # Demonstrating Various Propensity Analyses using the Right Heart Catheterization data
 
-This example uses real data from the SUPPORT study, describing analyses related to the causal effects of right heart catheterization in critically ill patients.
+This example uses real data from the SUPPORT study, describing some analyses related to the causal effects of right heart catheterization in critically ill patients.
 
 - The [R Markdown code]
 - The HTML version is most easily [viewed via RPubs](https://rpubs.com/TELOVE/rhc-500-2020) at https://rpubs.com/TELOVE/rhc-500.
