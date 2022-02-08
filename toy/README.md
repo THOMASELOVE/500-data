@@ -4,7 +4,7 @@ Last Update: 2022-02-08
 
 The entire example can be downloaded from the front page of the 500-data website.
 
-Here is the [R Markdown file](https://github.com/THOMASELOVE/500-data/blob/master/toy2021/toy2021_analysis.Rmd) including all code.
+Here is the [R Markdown file](https://github.com/THOMASELOVE/500-data/blob/master/toy/toy_analysis.Rmd) including all code.
 
 I've also placed an [HTML version on RPubs](https://rpubs.com/TELOVE/toy-500) at https://rpubs.com/TELOVE/toy-500, and you can download the R Markdown file from there, too (just click on the CODE box on the top right of the screen.)
 
@@ -16,7 +16,7 @@ I've also placed an [HTML version on RPubs](https://rpubs.com/TELOVE/toy-500) at
     - the use of the `toy` rather than `toy2021` data set (they are the same; just named differently)
     - upgrades to a more recent version of R and RStudio.
 
-The `toy.csv` data file, in [raw, downloadable form](https://raw.githubusercontent.com/THOMASELOVE/500-data/master/toy2021/data/toy2021.csv).
+The `toy.csv` data file, in [raw, downloadable form](https://raw.githubusercontent.com/THOMASELOVE/500-data/master/toy/data/toy.csv).
 
 - The Data Set is 100% fictional.
     - It contains data on 400 subjects (140 treated and 260 controls) on treatment status, six covariates, and three outcomes, with no missing observations anywhere.
