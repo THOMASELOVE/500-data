@@ -8,7 +8,7 @@ Here is the [R Markdown file](https://github.com/THOMASELOVE/500-data/blob/maste
 
 I've also placed an [HTML version on RPubs](https://rpubs.com/TELOVE/toy-500) at https://rpubs.com/TELOVE/toy-500, and you can download the R Markdown file from there, too (just click on the CODE box on the top right of the screen.)
 
-- As compared to the recording from 2021 which served as Class 04, there are:
+- As compared to the recording from 2021 which served as [Class 04](https://github.com/THOMASELOVE/500-2022/tree/main/classes/class04), there are:
     - small changes to fix the issues identified in that recording, 
     - renumbering of the sections to include the setup and data ingest,
     - some changes necessitated by changes in the `cobalt` package, 
