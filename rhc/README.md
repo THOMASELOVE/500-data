@@ -9,7 +9,15 @@ This example uses real data from the SUPPORT study, describing some matching and
 
 Details on the SUPPORT study may be found at
 
-- Connors Alfred F et al. 1996 [The Effectiveness of Right Heart Catheterization in the Initial Care of Critically Ill Patients](https://github.com/THOMASELOVE/500-2021/blob/master/sources/articles/Connors%20et%20al%201996%20JAMA%20The%20Right%20Heart%20Catheterization%20Study.pdf) *Journal of the American Medical Association*, 1996; 276: 889-897.
+- Connors Alfred F et al. 1996 [The Effectiveness of Right Heart Catheterization in the Initial Care of Critically Ill Patients](https://github.com/THOMASELOVE/500-2022/blob/main/sources/articles/Connors%20et%20al%201996%20JAMA%20The%20Right%20Heart%20Catheterization%20Study.pdf) *Journal of the American Medical Association*, 276: 889-897.
+
+Another article of special interest is:
+
+- Hirano K and Imbens GW 2001 [Estimation of Causal Effects using Propensity Score Weighting: An Application to Data on Right Heart Catheterization](https://github.com/THOMASELOVE/500-2022/blob/main/sources/articles/Hirano%20and%20Imbens%202001%20Weighting%20in%20RHC.pdf) *Health Services & Outcomes Research Methodology*, 2, 259-278.
 
 I hope this is helpful to you. We update this document occasionally as problems emerge. If you have questions, please contact us at 500-help at case dot edu.
 
+## Another Example
+
+1. Another propensity analysis of these data [is available here](http://rstudio-pubs-static.s3.amazonaws.com/8257_c577ba847be34e89b85a326f20b6d6b9.html). 
+2. And here's [(part of) another one](https://ehsanx.github.io/SARGC-TIMethods/).
