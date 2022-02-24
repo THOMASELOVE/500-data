@@ -1,4 +1,4 @@
-# Demonstrating Various Propensity Analyses using the Right Heart Catheterization data
+# Some Propensity Analyses using the Right Heart Catheterization data
 
 This example uses real data from the SUPPORT study, describing some matching and weighting analyses related to the causal effects of right heart catheterization in critically ill patients.
 
