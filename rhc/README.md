@@ -2,7 +2,7 @@
 
 This example uses real data from the SUPPORT study, describing some matching and weighting analyses related to the causal effects of right heart catheterization in critically ill patients.
 
-- The [R Markdown code](https://github.com/THOMASELOVE/500-data/blob/master/rhc/R/01_rhc.Rmd) is now available.
+- The [R Markdown code](https://github.com/THOMASELOVE/500-data/blob/master/rhc/R/rhc_analysis.Rmd) is now available.
 - The HTML version is most easily [viewed via RPubs](https://rpubs.com/TELOVE/rhc-500) at https://rpubs.com/TELOVE/rhc-500.
 - The [clean Rds data set](https://github.com/THOMASELOVE/500-data/blob/master/rhc/data/rhc.Rds), and the [original .csv data](https://github.com/THOMASELOVE/500-data/blob/master/rhc/data/rhc.csv). 
     - The data are [also housed at Vanderbilt University](https://biostat.app.vumc.org/wiki/pub/Main/DataSets/rhc.csv), with [this description](https://biostat.app.vumc.org/wiki/pub/Main/DataSets/rhc.html).
