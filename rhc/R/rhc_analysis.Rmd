@@ -1214,7 +1214,7 @@ hospdays_match_results
 ggplot(hospdays_match_results, aes(x = approach, y = estimate, ymin = conf.low, ymax = conf.high)) +
     geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
     geom_pointrange() +
-    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    geom_hline(yintercept = 0, col = "red", linetype = "dashed") +
     theme_bw() +
     coord_flip() +
     labs(title = "Comparing ATT Estimates for LOS using RHC Propensity Matching",
@@ -1230,7 +1230,7 @@ hospdays_match_results %>%
 ggplot(., aes(x = description, y = estimate, ymin = conf.low, ymax = conf.high)) +
     geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
     geom_pointrange() +
-    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    geom_hline(yintercept = 0, col = "red", linetype = "dashed") +
     theme_bw() +
     coord_flip() +
     labs(title = "ATT Matching Estimates in RHC (LOS)",
@@ -1636,7 +1636,7 @@ hospdays_results %>%
                   ymin = conf.low, ymax = conf.high)) +
     geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
     geom_pointrange() +
-    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    geom_hline(yintercept = 0, col = "red", linetype = "dashed") +
     theme_bw() +
     coord_flip() +
     labs(title = "Comparing ATT Estimates for LOS",
@@ -1654,7 +1654,7 @@ hospdays_results %>%
                   ymin = conf.low, ymax = conf.high)) +
     geom_text(aes(label = round_half_up(estimate,2)), vjust = -1.25) +
     geom_pointrange() +
-    geom_hline(yintercept = 1, col = "red", linetype = "dashed") +
+    geom_hline(yintercept = 0, col = "red", linetype = "dashed") +
     theme_bw() +
     coord_flip() +
     labs(title = "Comparing ATT Estimates for LOS",
