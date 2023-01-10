@@ -1,0 +1,74 @@
+---
+title: "432 Lab 0 Template (replace these words)"
+subtitle: "Use your own subtitle, if you like."
+author: "Your Name Goes Here"
+date: last-modified
+format: 
+  html:
+    toc: true
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    code-overflow: wrap
+    embed-resources: true
+    date-format: iso
+    theme: default  ## change the theme if you prefer
+---
+
+# R Setup {.unnumbered}
+
+```{r}
+#| message: false
+#| warning: false
+
+knitr::opts_chunk$set(comment = NA) # do not remove this
+
+library(janitor) # load other packages as desired
+
+library(tidyverse) # load tidyverse last
+
+theme_set(theme_bw()) # set theme for ggplots
+```
+
+## Loading the Data {.unnumbered}
+
+```{r}
+lab0 <- read_csv("https://raw.githubusercontent.com/THOMASELOVE/500-data/master/data/lab0.csv",
+                 show_col_types = FALSE) |>
+    mutate(subject = as.character(subject),
+           treatment = factor(treatment))
+
+dim(lab0)
+```
+
+Note that we should have 135 rows and 7 columns here.
+
+It would be helpful at this point to look the data over a bit and understand what you have.
+
+# Task 1
+
+## Fitting the model and storing the predictions
+
+```{r}
+m1 <- glm(treatment=="Treated" ~ cov1 + cov2 + cov3 + cov4 + cov5,
+          family=binomial(), data=lab0)
+
+lab0$linpred <- m1$linear.predictors
+lab0$prob <- m1$fitted.values
+
+lab0 # note new columns
+```
+
+# Task 2
+
+Follow the instructions.
+
+# Task 3
+
+Follow the instructions.
+
+# Session Information
+
+```{r}
+xfun::session_info()
+```
