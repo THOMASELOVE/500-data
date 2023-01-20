@@ -1,5 +1,5 @@
 ---
-title: "500 Lab 0 Template: CHANGE THIS TITLE"
+title: "500 Lab 1 Template: CHANGE THIS TITLE"
 author: "YOUR NAME GOES HERE"
 date: last-modified
 format: 
