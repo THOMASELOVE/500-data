@@ -1,6 +1,6 @@
 # The Toy Example 
 
-Last Update: 2022-02-08
+Last Update: 2023-02-07
 
 The entire example can be downloaded from the front page of the 500-data website.
 
