@@ -4,17 +4,9 @@ Last Update: 2022-02-08
 
 The entire example can be downloaded from the front page of the 500-data website.
 
-Here is the [R Markdown file](https://github.com/THOMASELOVE/500-data/blob/master/toy/toy_analysis.Rmd) including all code.
+Here is the [Quarto file](https://github.com/THOMASELOVE/500-data/blob/master/toy/toy_analysis.qmd) including all code.
 
-I've also placed an [HTML version on RPubs](https://rpubs.com/TELOVE/toy-500) at https://rpubs.com/TELOVE/toy-500, and you can download the R Markdown file from there, too (just click on the CODE box on the top right of the screen.)
-
-- As compared to the recording from 2021 which served as [Class 04](https://github.com/THOMASELOVE/500-2022/tree/main/classes/class04), there are:
-    - small changes to fix the issues identified in that recording, 
-    - renumbering of the sections to include the setup and data ingest,
-    - some changes necessitated by changes in the `cobalt` package, 
-    - some correction of typographical errors, 
-    - the use of the `toy` rather than `toy2021` data set (they are the same; just named differently)
-    - upgrades to a more recent version of R and RStudio.
+I've also placed an [HTML version on RPubs](https://rpubs.com/TELOVE/toy-500) at https://rpubs.com/TELOVE/toy-500, and you can download the R Markdown file from there, too (just click on the CODE box on the top right of the screen and select View Source.)
 
 The `toy.csv` data file, in [raw, downloadable form](https://raw.githubusercontent.com/THOMASELOVE/500-data/master/toy/data/toy.csv).
 
