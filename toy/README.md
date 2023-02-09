@@ -6,7 +6,7 @@ The entire example can be downloaded from the front page of the 500-data website
 
 Here is the [Quarto file](https://github.com/THOMASELOVE/500-data/blob/master/toy/toy_analysis.qmd) including all code.
 
-I've also placed an [HTML version on RPubs](https://rpubs.com/TELOVE/toy-500) at https://rpubs.com/TELOVE/toy-500, and you can download the R Markdown file from there, too (just click on the CODE box on the top right of the screen and select View Source.)
+I've also placed an [HTML version on RPubs](https://rpubs.com/TELOVE/toy-500) at https://rpubs.com/TELOVE/toy-500, and you can download the Quarto file from there, too (just click on the CODE box on the top right of the screen and select View Source.)
 
 The `toy.csv` data file, in [raw, downloadable form](https://raw.githubusercontent.com/THOMASELOVE/500-data/master/toy/data/toy.csv).
 
