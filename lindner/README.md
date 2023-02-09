@@ -10,4 +10,3 @@ We hope you find this helpful.
 
 - The latest [R Markdown version (code only) is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner_2021.Rmd).
 - An [HTML version is available for viewing on RPubs](https://rpubs.com/TELOVE/lindner-2021-500) at https://rpubs.com/TELOVE/lindner-2021-500.
-- The latest [PDF version is here](https://github.com/THOMASELOVE/500-data/blob/master/lindner/lindner_2021.pdf).
