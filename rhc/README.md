@@ -4,7 +4,7 @@ This example uses real data from the SUPPORT study, describing some matching and
 
 ## 2023 version
 
-- The [Quarto code] from 2023 is available now.
+- The [Quarto code](https://github.com/THOMASELOVE/500-data/blob/master/rhc/rhc.qmd) from 2023 is available now.
 - The HTML version is most easily [viewed via RPubs](https://rpubs.com/TELOVE/rhc-500) at <https://rpubs.com/TELOVE/rhc-500>.
 
 ## 2022 version
