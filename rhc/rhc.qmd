@@ -1768,9 +1768,50 @@ survdays_results %>%
 
 # Sensitivity Analyses After Matching
 
-## WARNING!!
+## For the Binary Outcome, Death
 
-I am only including some of the options I used to include here, owing to some problems with the **rbounds** package. I have a note in to the developer of **rbounds** and will update here when I have a solution.
+The `rbounds` package can evaluate binary outcomes using the `binarysens` and `Fishersens` functions. The `binarysens` function works directly on a matched sample as developed using the Matching package. For example, in our third match, based on the genetic search algorithm with 1:1 matching without replacement, this is `match3`. Note that in order to do this, we needed to run `match3` including the appropriate (binary) outcome (Y).
+
+```{r}
+Y <- rhc$died
+X <- cbind(rhc$linps, rhc$ps)
+Tr <- as.logical(rhc$swang1 == "RHC")
+match3 <- Match(Y = Y, Tr = Tr, X = X, estimand = "ATT", 
+                 Weight.matrix = genout3)
+
+Rc <- match3$mdata$Y[match3$mdata$Tr==0]
+Rt <- match3$mdata$Y[match3$mdata$Tr==1] 
+
+out.tab <- matrix(c(table(Rc, Rt)), nrow = 2)
+out.tab
+
+binarysens(out.tab[2,1], out.tab[1,2],
+           Gamma = 1.5, GammaInc = 0.05)
+```
+
+At a 5% significance level, we need to compare the listed upper bounds to a value of $\alpha = 0.05/2 = 0.025$. It appears that we retain significance up to a hidden bias of $\Gamma$ = 1.15, but not at $\Gamma$ = 1.2. See Chapter 9 of Rosenbaum's *Observation and Experiment* for more details on interpretation of this result.
+
+We can also use this approach with other Matching results, including Match 6, which is a 1:2 match with replacement. Again, we have to run the match with the appropriate outcome included.
+
+```{r}
+Y <- rhc$died
+X <- rhc$linps
+Tr <- as.logical(rhc$swang1 == "RHC")
+match6 <- Match(Y = Y, Tr = Tr, X = X, M = 2, 
+                estimand = "ATT", replace = TRUE, 
+                ties = FALSE)
+
+Rc <- match6$mdata$Y[match6$mdata$Tr==0]
+Rt <- match6$mdata$Y[match6$mdata$Tr==1] 
+
+out.tab <- matrix(c(table(Rc, Rt)), nrow = 2)
+out.tab
+
+binarysens(out.tab[2,1], out.tab[1,2],
+           Gamma = 1.5, GammaInc = 0.05)
+```
+
+Here, at a 5% significance level, we again compare our upper bounds to $\alpha/2 = 0.025$ and we retain significance up to a hidden bias of $\Gamma$ = 1.10, but not at $\Gamma$ = 1.15.
 
 ## For the Quantitative Outcome, In-Hospital Length of Stay
 
@@ -1782,11 +1823,14 @@ X <- cbind(rhc$linps, rhc$ps)
 Tr <- as.logical(rhc$swang1 == "RHC")
 match3 <- Match(Y = Y, Tr = Tr, X = X, estimand = "ATT", 
                  Weight.matrix = genout3)
-psens(match3$index.treated, match3$index.control,
-      Gamma = 1.5, GammaInc = 0.1)
+
+Rc <- match3$mdata$Y[match3$mdata$Tr==0]
+Rt <- match3$mdata$Y[match3$mdata$Tr==1] 
+
+psens(Rt, Rc, Gamma = 1.5, GammaInc = 0.05)
 ```
 
-At a 5% significance level, we retain significance up to a hidden bias of $\Gamma$ = 1.1, but not at $\Gamma$ = 1.2. See the `toy_2019` example discussed in Class 4, as well as Chapter 9 of Rosenbaum's *Observation and Experiment* for more details on interpretation of this result.
+At a 5% significance level, we retain significance up to a hidden bias of $\Gamma$ = 1.05, but not at $\Gamma$ = 1.1. See Chapter 9 of Rosenbaum's *Observation and Experiment* for more details on interpretation of this result.
 
 ## For the Survival Outcome, In-Study Time to Death
 
@@ -1830,7 +1874,7 @@ a8 <- bind_rows(a4, a5, a6, a7)
 a8 %>% tabyl(result) %>% adorn_totals()
 ```
 
-So we have counts for the pairs where a clear winner is identified, and we can enter the spreadsheet. We need the number of pairs with a clear winner, and the number of pairs where the No RHC patient lived longer than the RHC patient.
+So we have counts for the pairs where a clear winner is identified, and we can enter the spreadsheet. We need the number of pairs with a clear winner, and the number of pairs where the No RHC patient lived longer than the RHC patient. Doing so, we see that the result doesn't meet the sign-score test standard necessary to have a p value below 0.10, so we stop there, and conclude that the effect would be highly sensitive to hidden bias.
 
 
 # Session Information
