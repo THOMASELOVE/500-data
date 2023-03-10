@@ -2077,7 +2077,12 @@ Tr <- as.logical(toy$treated)
 Y <- toy$out1.cost
 match1 <- Match(Tr=Tr, X=X, Y = Y, M = 1, replace=FALSE, ties=FALSE)
 summary(match1)
-psens(match1$index.treated, match1$index.control, Gamma = 5, GammaInc = 0.25)
+
+Rc <- match1$mdata$Y[match1$mdata$Tr==0]
+Rt <- match1$mdata$Y[match1$mdata$Tr==1] 
+
+
+psens(Rt, Rc, Gamma = 5, GammaInc = 0.25)
 ```
 
 If the study were free of hidden bias, that is, if $\Gamma = 1$, then there would be **strong** evidence that the treated patients had higher costs, and the specific Wilcoxon signed rank test we're looking at here shows a $p$ value < 0.0001. The sensitivity analysis we'll conduct now asks how this conclusion might be changed by hidden biases of various magnitudes, depending on the significance level we plan to use in our test.
@@ -2111,7 +2116,7 @@ As we see in Chapter 9 of Rosenbaum's *Observation and Experiment*, we can descr
 ## An Alternate Approach - the Hodges-Lehman estimate
 
 ```{r}
-hlsens(match1$index.treated, match1$index.control)
+hlsens(Rt, Rc)
 ```
 
 If the $\Gamma$ value is 2.0, then this implies that the Hodges-Lehmann estimate might be as low as 4 or as high as 16.1 (it is 10.0 in the absence of hidden bias in this case - when $\Gamma$ = 0.)
