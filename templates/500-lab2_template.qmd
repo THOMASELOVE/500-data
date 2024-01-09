@@ -1,0 +1,377 @@
+---
+title: "500 Lab 2 Template (replace these words)"
+subtitle: "Use your own subtitle, if you like."
+author: "Your Name Goes Here"
+date: last-modified
+format: 
+  html:
+    toc: true
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    code-overflow: wrap
+    embed-resources: true
+    date-format: iso
+    theme: default  ## change the theme if you prefer
+---
+
+# R Setup {.unnumbered}
+
+```{r}
+#| message: false
+#| warning: false
+
+knitr::opts_chunk$set(comment = NA) # do not remove this
+
+library(janitor)
+library(magrittr)
+library(Hmisc)
+library(knitr)
+library(tableone)
+library(arm)
+library(Matching)
+library(cobalt)
+library(broom)
+library(survival)
+library(tidyverse)
+
+theme_set(theme_bw()) # set theme for ggplots
+```
+
+## Loading the canc3 Data {.unnumbered}
+
+```{r}
+url_canc3 <- 
+  "https://raw.githubusercontent.com/THOMASELOVE/500-data/master/data/canc3.csv"
+
+canc3 <- read_csv(url_canc3, 
+                  show_col_types = FALSE) |>
+  mutate(subject = as.character(subject)) |>
+  clean_names()
+
+dim(canc3)
+```
+
+## The Codebook {.unnumbered}
+
+The data file includes 400 observations, on 12 variables.
+
+Variable | Description | Notes
+----------: | -----------------| --------------------------------------------------------------------------------
+`subject` | Study ID number  | 1-250 are control, 251-400 are intervention
+`treated` | Treatment status | 1 = intervention (150), 0 = control (250)
+`age`     | Patient age      | At study entry, Observed range: 34, 93 years
+`female`  | Patient sex      | 1 = female (n = 258), 0 = male (n = 142)
+`race`    | Patient's race   | 1 = Caucasian / White (n = 317), 0 = not (n = 83)
+`married` | Marital status   | At study entry: 1 = Married (n = 245), 0 = not (n = 155)
+`typeca`  | Type of cancer   | 3 categories: 1 = GI/colorectal (n = 177), 2 = Lung (n = 129), 3 = GYN (n = 94). 
+`stprob`  | 5-year survival  | Model probability of 5-year survival, based on type and stage of cancer. Observed range: 0.01, 0.72
+`charlson` | Charlson score  | Comorbidity index at baseline: higher scores indicate greater comorbidity. Observed range: 0-7.
+`ecog`    | ECOG score       | 0 = fully active, 1 = restricted regarding physically strenuous activity, 2 = ambulatory, can self-care, otherwise limited, 3 = capable of only limited self-care.
+`alive`   | Mortality Status | Alive at study conclusion & 1 = alive (n = 245), 0 = dead (n = 155)
+`hospice` | Hospice Status | Entered hospice before death or study end & 1 = hospice (n = 143), 0 = no (n = 257)
+
+Note: You are welcome to treat `ecog` and `charlson` as either quantitative or categorical variables in developing your response. 
+
+# Data Management and Creation of New Formats {.unnumbered}
+
+- For **binary** outcomes and treatments, we want both numerical (0/1) and factor (with meaningful names) versions, so that includes treatment status [in `canc3`, this is `treated`] or binary outcomes [in `canc3`, this includes `alive` and `hospice`]. For other binary variables (for instance, representing covariates), all we really need are the numeric (0/1) variables we already have, although I'll use a better name for `race`, so I can indicate what 1 means there.
+- For **categorical variables with more than two categories**, we want factor (with meaningful names, especially for unordered categories) versions of the variable [in `canc3`, these are `typeca` and `ecog`], and we may also eventually need a series of numeric (0/1) indicators to represent the individual categories. 
+- For **quantitative** variables [in `canc3`, these will be `age`, `stprob` and `charlson` assuming that you, like me, are willing to treat `charlson` as quantitative], we just want the numerical representations we already have.
+
+Our primary cleanup task will be to create factor versions of five of the variables (specifically, `treated`, `alive` and `hospice` on the binary side and `typeca` and `ecog` on the multi-categorical side), and numeric indicator variables for the multi-categorical variables, while the remaining variables can stay as they are.
+
+```{r building_new_versions}
+canc3.original <- canc3 # save original version in case of catastrophe
+
+canc3 <- canc3 |>
+    mutate(treated_f = factor(treated, levels = c(0,1), 
+                              labels = c("Control", "Intervention")),
+           treatment_group = fct_relevel(treated_f, "Intervention"),
+           alive_f = factor(alive, levels = c(0,1), 
+                            labels = c("Dead", "Alive")),
+           hospice_f = factor(hospice, levels = c(0, 1),
+                              labels = c("No Hospice", "Hospice")),
+           caucasian = race,
+           typeca_GI = as.numeric(typeca == 1),
+           typeca_Lung = as.numeric(typeca == 2),
+           typeca_GYN = as.numeric(typeca == 3),
+           ecog = factor(ecog),
+           ecog_0 = as.numeric(ecog == 0),
+           ecog_1 = as.numeric(ecog == 1),
+           ecog_2 = as.numeric(ecog == 2),
+           ecog_3 = as.numeric(ecog == 3),
+           typeca = factor(typeca, levels = c(1, 2, 3), 
+                           labels = c("GI/colorectal", "Lung", "GYN")))
+```
+
+## Table 1 to Check Results {.unnumbered}
+
+I'll build a simple Table 1, without *p* values, to look over the results. We could easily leave off the two outcomes, but I'll keep them in for now.
+
+```{r}
+varlist = c("age", "female", "caucasian", "married", "typeca", "ecog", 
+            "alive_f", "hospice_f")
+factorlist = c("female", "caucasian", "married", "typeca", "ecog", 
+            "alive_f", "hospice_f")
+CreateTableOne(vars = varlist, strata = "treatment_group", 
+               data = canc3, factorVars = factorlist, test = FALSE)
+rm(varlist, factorlist)
+```
+
+Everything looks reasonable to me.
+
+# Task 1.
+
+> Ignoring the covariate information, provide an appropriate (unadjusted) estimate (with point estimate and 95\% confidence interval) of the effect of the intervention on each of the two binary outcomes; first survival, and then hospice entry.
+
+## Unadjusted Logistic Regression Model for Survival
+
+Here is our point estimate and 95% CI for the odds ratio estimate related to survival.
+
+```{r task1_alive}
+unadj_alive <- 
+  glm(alive ~ treated_f, data=canc3, family=binomial)
+
+# code here to summarize results from model called unadj_alive
+```
+
+## Unadjusted logistic regression model for the `hospice` outcome
+
+Our odds ratio estimate for the intervention's impact on going to hospice (with a 95% CI) is ...
+
+```{r task1 hospice}
+# code here to build model and summarize it
+```
+
+# Task 2. 
+
+> Next, fit a propensity score model to the data, using the eight pieces of covariate information, including age, gender, race, marital status, cancer type (which must be treated in R as a factor rather than just a continuous predictor) the model survival probability, Charlson index and ECOG. Do not include interactions between terms.
+
+## Fitting the Model and Saving Raw and Linear Propensity Scores
+
+```{r propensity_score_model}
+psmodel <- glm(treated_f ~ age + female + caucasian + 
+                 married + typeca + stprob + charlson + 
+                 ecog, family=binomial, data=canc3)
+
+## code here to summarize the model
+
+
+## code follows to save the fitted values and linear predictors to the canc3 data
+
+canc3 <- canc3 |>
+  mutate(ps = psmodel$fitted,
+         linps = psmodel$linear.predictors)
+```
+
+## Describing the Overlap Numerically
+
+```{r}
+## code to check overlap numerically
+```
+
+## Describing the Overlap Graphically
+
+```{r}
+## code for plot or plots
+```
+
+# Task 3.
+
+> Evaluate Rubin's Rule 1 and Rubin's Rule 2 for the data taken as a whole. What can you conclude about the balance across the two exposure groups prior to using the propensity score? What do these results suggest about your model in Task 1?
+
+## Rubin's Rule 1
+
+First, the absolute value of the standardized difference of the linear propensity score, comparing the intervention group to the control group, should be close to 0, ideally below 10\%, and in any case less than 50\%. If so, we may move on to Rubin's Rule 2.
+
+To evaluate this here, I'll use :
+
+```{r}
+rubin1.unadj <- 
+  abs(100*(mean(canc3$linps[canc3$treated==1]) -
+             mean(canc3$linps[canc3$treated==0])) / 
+                           sd(canc3$linps))
+rubin1.unadj
+```
+
+Here, I've used the overall standard deviation of the linear propensity scores as my denominator. We could instead have restricted this to the standard deviation within the treatment group, yielding...
+
+```{r}
+rubin1.unadj_ATT <- 
+  abs(100*(mean(canc3$linps[canc3$treated==1]) -
+             mean(canc3$linps[canc3$treated==0])) / 
+                           sd(canc3$linps[canc3$treated == 1]))
+rubin1.unadj_ATT
+```
+
+## Rubin's Rule 2
+
+Second, the ratio of the variance of the linear propensity score in the intervention group to the variance of the linear propensity score in the control group should be close to 1, ideally between 4/5 and 5/4, but certainly between 1/2 and 2. If so, we may move on to Rule 3.
+
+To evaluate this here, I'll use:
+
+```{r}
+rubin2.unadj <- with(canc3,
+  var(linps[treated == 1]) / var(linps[treated == 0]))
+
+rubin2.unadj
+```
+
+## Rubin's Rule 3 (not part of the lab)
+
+I didn't ask you to do this, but one way of finding the Rubin's Rule 3 results prior to adjustment looks like this:
+
+```{r create rubin3 function}
+## General function rubin3 to help calculate Rubin's Rule 3
+decim <- function(x, k) format(round(x, k), nsmall=k)
+rubin3 <- function(data, covlist, linps) {
+  covlist2 <- as.matrix(covlist)
+  res <- NA
+  for(i in 1:ncol(covlist2)) {
+    cov <- as.numeric(covlist2[,i])
+    num <- var(resid(lm(cov ~ data$linps))[data$exposure == 1])
+    den <- var(resid(lm(cov ~ data$linps))[data$exposure == 0])
+    res[i] <- decim(num/den, 3)
+  }
+  final <- tibble(name = names(covlist), 
+                  resid.var.ratio = as.numeric(res))
+  return(final)
+}
+```
+
+# Task 4.
+
+> Use direct adjustment for the (logit of) the propensity score in a logistic regression model for the `hospice` outcome to evaluate the intervention's effect on hospice entry, developing a point estimate (this should be an odds ratio) and a 95\% confidence interval. 
+
+## Fitting the Model
+
+Our new model will add the linear propensity score on the right hand side...
+
+```{r ps-adjusted hospice model}
+adj.hospice <- glm(hospice ~ treated + linps, data=canc3, family=binomial)
+
+## code to summarize and understand the model
+```
+
+# Task 5 
+
+> In our first propensity score matching attempt with the `canc3` data, we'll apply a 1:1 match without replacement. Do the matching, and then evaluate the balance associated with this approach, as follows.
+
+We'll do 1:1 greedy matching, without replacement.
+
+```{r running the propensity matching 1:1}
+## Use 1:1 greedy matching to match all treated to unique control patients
+## on the linear propensity scores. We'll break ties at random, as well.
+
+## requires Matching library
+
+X <- psmodel$linear.predictors ## matching on the linear propensity score
+
+Tr <- as.logical(canc3$treated)
+
+set.seed(500) 
+# if we rerun Match, we want to get the same answer
+# since we're breaking ties at random, we should set a seed
+match1 <- Match(Tr=Tr, X=X, M = 1, replace=FALSE, ties=FALSE)
+
+summary(match1)
+```
+
+## Create Data Frame with Matched Sample After 1:1 Matching
+
+```{r create matched sample data frame}
+## Finally, we'll create a new data frame, containing only the matched sample
+matches <- factor(rep(match1$index.treated, 2))
+canc3.matchedsample <- 
+  cbind(matches, 
+        canc3[c(match1$index.control, 
+                match1$index.treated),])
+```
+
+As a sanity check, let's ensure that our matched sample has 150 treated and 150 control subjects.
+
+```{r}
+canc3.matchedsample |> tabyl(treated_f)
+```
+
+## Task 5a.
+
+> Evaluate the degree of covariate imbalance before and after propensity score matching for each of the eight covariates and for the (linear *and* raw) propensity score. Do so by plotting the standardized differences. Your plot should include standardized differences that identify the three cancer types (one remaining as baseline) individually, one each for any other covariates you treat as quantitative, and an appropriate set of indicators for any others you treat as categorical, plus one for the linear propensity score, and one for the raw propensity score.
+
+```{r}
+covs_1 <- canc3 |>
+    select(age, female, caucasian, married, typeca, stprob,
+           charlson, ecog, ps, linps)
+
+b <- bal.tab(match1,
+             treat = canc3$treated,
+             covs = covs_1,
+             stats = c("m", "v"),
+             quick = FALSE, un = TRUE, disp.v.ratio = TRUE)
+
+b
+```
+
+### Distributional Balance of the propensity scores
+
+```{r}
+## code goes here. I used bal.plot()
+```
+
+### Love Plot of Standardized Differences
+
+Note the use of stars to show the results for the indicator variables.
+
+```{r}
+## code goes here. I used love.plot()
+```
+
+### Plot of Variance Ratios
+
+```{r}
+## code goes here
+```
+
+## Task 5b.
+
+> Evaluate the balance imposed by your 1:1 match via calculation of Rubin's Rule 1 and Rule 2 results, and comparing them to our results obtained prior to propensity adjustment in  Task 3.
+
+### Checking Rubin's Rules 1 and 2
+
+```{r}
+## code goes here
+```
+
+## Task 5c.
+
+> Finally, find a point estimate (and 95\% confidence interval) for the effect of the treatment on the `hospice` outcome, based on your 1:1 match on the propensity score. Since the outcomes are binary, you should be using a conditional logistic regression to establish odds ratio estimates, while accounting for the pairs.
+
+We'll run a conditional logistic regression (using the `survival` package) to estimate the intervention effect.
+
+```{r hospice model after matching}
+model_hospice_matched <- 
+  clogit(hospice ~ treated + strata(matches),
+         data=canc3.matchedsample)
+
+## code goes here to summarize model
+```
+
+# Task 6.
+
+> Compare your unadjusted (Task 1), propensity score-adjusted (by regression: Task 4) and propensity matching (Task 5) estimates of the effect of the intervention on the `hospice` outcome in a table (or better, graph.) What can you conclude?
+
+
+## Building a Data Frame of the Results
+
+To make a nice plot, I'll want a tibble (data frame) of the `hospice` results.
+
+```{r}
+## code goes here
+```
+
+# Session Information
+
+```{r}
+xfun::session_info()
+```
