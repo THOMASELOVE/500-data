@@ -73,7 +73,7 @@ lab0 # note new columns
 ## Numerical Summary
 
 ```{r}
-
+# place your code to develop a numerical summary here
 ```
 
 
@@ -84,7 +84,7 @@ lab0 # note new columns
 ## Graphical Summary
 
 ```{r}
-
+# place your code to develop a graphical summary here
 ```
 
 
