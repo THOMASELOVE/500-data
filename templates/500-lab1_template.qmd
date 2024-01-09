@@ -1,0 +1,235 @@
+---
+title: "500 Lab 1 Template (replace these words)"
+subtitle: "Use your own subtitle, if you like."
+author: "Your Name Goes Here"
+date: last-modified
+format: 
+  html:
+    toc: true
+    number-sections: true
+    code-fold: show
+    code-tools: true
+    code-overflow: wrap
+    embed-resources: true
+    date-format: iso
+    theme: default  ## change the theme if you prefer
+---
+
+# R Setup {.unnumbered}
+
+```{r}
+#| message: false
+#| warning: false
+
+knitr::opts_chunk$set(comment = NA) # do not remove this
+
+library(janitor) 
+library(naniar)
+library(tableone)
+library(mosaic)
+library(broom)
+# load other packages as desired
+# the packages listed here are used in the sketch
+library(tidyverse) # load tidyverse last
+
+theme_set(theme_bw()) # set theme for ggplots
+```
+
+## Loading the Data {.unnumbered}
+
+```{r}
+url_1 <- "https://raw.githubusercontent.com/THOMASELOVE/500-data/master/data/dig1.csv"
+
+dig1 <- read_csv(url_1, show_col_types = FALSE) |>
+  mutate(subjectid = as.character(subjectid)) |>
+  clean_names()
+
+dim(dig1)
+```
+
+Note that we should have 6800 rows and 72 columns here.
+
+It would be helpful at this point to look the data over a bit and understand what you have, in particular, the impact of using `clean_names()`.
+
+# Create a sample
+
+> Identify the subjects within the `dig1.csv` data which have complete information on the indicator of previous myocardial infarction, `PREVMI`. Filter the data set to include only those subjects.
+
+So we'll filter out anyone with missing `PREVMI`.
+
+```{r}
+favstats(~ prevmi, data = dig1) # before filtering
+
+# insert code here to filter the data
+
+```
+
+> Then select a sample of 1000 subjects from DIG study participants with known `PREVMI`. Specify your sampling seed (via `set.seed`) to be `2024500` as part of selecting your sample of 1000 subjects.
+
+```{r}
+set.seed(2024500)
+
+dig_sam1 <- slice_sample(dig1, n = 1000)
+
+## then insert code to look over the data a bit
+```
+
+# Create a Table 1
+
+> The Table 1 should describe the data according to whether or not the subject had a previous myocardial infarction (`PREVMI`) across each of these 12 variables. 
+
+Variable | Description
+-------: | -----------------------------------------------------
+`TRTMT` | Treatment group (1 = DIG, 0 = Placebo)
+`AGE` | Age in years
+`RACE` | White (1) or Non-White (2)
+`SEX` | Male (1) or Female (2)
+`EJF_PER` | Ejection Fraction (percent)
+`CHESTX` | Chest X-ray (CT ratio)
+`BMI` | Body-Mass Index
+`KLEVEL` | Serum Potassium level (mEq/l)
+`CREAT` | Serum Creatinine level (mg/dl)
+`CHFDUR` | Approximate Duration of CHF (mos.)
+`EXERTDYS` | Dyspnea on exertion (see note)
+`FUNCTCLS` | Current NYHA Functional Class (1 = I, 2 = II, 3 = III, 4 = IV)
+
+> Note that the `dyspnea` categories are: 0 = None or Unknown, 1 = Present, 2 = Past, 3 = Present and Past
+
+> Be sure to correctly represent each of the categorical variables as factors, rather than in the numerical form they start in. Label your factors to ease the work for the viewer, and reduce or eliminate the need to look at a codebook. Also, be sure to accurately report whether any missing values are observed in this sample.
+
+## Selecting the Variables We Need
+
+First, we'll select only those variables we'll actually use in our study, which includes the subject ID, the PREVMI information, and the 12 variables listed above.
+
+```{r}
+dig_sam1 <- dig_sam1 |> 
+  select(subjectid, prevmi, trtmt, age, race, sex, 
+         ejf_per, chestx, bmi, klevel, creat, 
+         chfdur, exertdys, functcls)
+
+dim(dig_sam1)
+```
+
+We should now have 1000 observations on 14 variables in our `dig_sam1` tibble.
+
+## Converting Categorical Variables to Factors
+
+The categorical variables we'll want to treat using factors in R are:
+
+Variable | Description
+-------: | -----------------------------------------------------
+`PREVMI` | Did subject have a previous MI? (1 = Yes, 0 = No)
+`TRTMT` | Treatment group (1 = DIG, 0 = Placebo)
+`RACE` | White (1) or Non-White (2)
+`SEX` | Male (1) or Female (2)
+`EXERTDYS` | Dyspnea on exertion
+`FUNCTCLS` | Current NYHA Functional Class (1 = I, 2 = II, 3 = III, 4 = IV)
+
+In each case, I'll create factor representations of these initial variables, and in some cases I'll resort them (with `fct_relevel()`) to obtain a more useful ordering.
+
+```{r}
+dig_sam1 <- dig_sam1 |>
+  mutate(prevmi_f = fct_recode(factor(prevmi), Yes = "1", No = "0"),
+         prevmi_f = fct_relevel(prevmi_f, "Yes"))
+         
+## Need to insert relevant code for other variables
+## Note I changed names to dyspnea_f instead of exertdys_f
+## and I changed name to nyha_f instead of functcls_f in sketch
+## After the mutates are completed, you'll want to select the 
+## variables you want to use in your study, including both versions
+## of the prevmi information.
+```
+
+Now, we have 15 variables, including both the factor and numeric versions of the previous MI information. 
+
+Do we have any missing data?
+
+```{r}
+## check for missing data goes here
+## probably want to use a function from the naniar package
+```
+
+## Resulting Table 1
+
+```{r}
+## this version uses my choice of variable names
+
+q3_t1 <- CreateTableOne(data = dig_sam1, 
+          vars = c("treat_f", "age", "race_f", 
+                   "sex_f", "ejf_per", "chestx", 
+                   "bmi", "klevel", "creat", 
+                   "chfdur", "dyspnea_f", "nyha_f"),
+          strata = c("prevmi_f"))
+
+## insert code to show the q3_t1 result
+```
+
+# Build a logistic regression model
+
+> Build a logistic regression model for previous MI using the main effects of the 12 variables above. I'd call the model `m1` that predicts the log odds of previous myocardial infarction (`PREVMI`) on the basis of the main effects of each of the twelve variables in your table above, for your sample of 1000 subjects. 
+
+```{r}
+## insert code to build and then summarize m1 here
+
+```
+
+# Redefine your sample and rebuild the Table and Model
+
+> Assuming you have at least one missing value in a predictor in your model for task 4, re-define your sample to include only the observations which are "complete cases" with no missing values on any of the key variables we're looking at. Specify the number of subjects (< 1000) that remain in your new sample. 
+
+> Now, **redo both Tasks 3 and 4** to describe this new sample and use it to fit a model. Call the new model `m2`. Verify that missing values no longer plague this new model. 
+
+## The New Sample
+
+We'll build a new `dig_sam2` that limits us to the cases with complete data.
+
+```{r}
+## I suggest using the drop_na() function here
+```
+
+## The New Table 1
+
+Here's the new Table 1, restricted to the people in this new sample.
+
+```{r}
+## code goes here
+```
+
+## The New Logistic Regression Model
+
+And here's the new model:
+
+```{r}
+## code to build and summarize m2 goes here
+```
+# Add the fitted probabilities from Task 5 to your data, then plot them against observed status
+
+> Use the model (`m2`) you built in Task 5 to add the fitted probability of previous myocardial infarction to the sample you used to create `m2`. 
+
+> Produce an attractive and useful graphical summary of the distribution of fitted probabilities of previous myocardial infarction broken down into two categories by the patient's actual `PREVMI` status in this sample. I strongly encourage you to round the probabilities to two decimal places before visualizing them.
+
+## Adding the Fitted Probabilities
+
+There are several ways to add the fitted probabilities back to the data. I might recommend something like `dig_sam2$m2fits <- predict(m2, type = "response")`
+
+```{r}
+## code goes here
+```
+
+
+Note that you need to specify "response" as the type of prediction you want in order to get fitted probabilities of previous MI, rather than the logit of those probabilities.
+
+## Building a Plot
+
+As for a graphical summary - I'd be happy with anything that permitted easy comparison of the two density estimates. Options shown in the sketch include a comparison boxplot with violin plot, faceted histograms, and frequency polygons. There are many other options.
+
+```{r}
+## code for plot goes here
+```
+
+
+# Session Information
+
+```{r}
+xfun::session_info()
+```
