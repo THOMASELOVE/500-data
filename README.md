@@ -1,6 +1,6 @@
 # 500-data
 
-Data and R code repository for 500 in Spring 2023.
+Data and R code repository for 500 in Spring 2024.
 
 To obtain all of the data and code in this repository in a single zip file, click on the green button marked Code and click on Download ZIP.
 
