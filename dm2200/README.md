@@ -1,8 +1,8 @@
 # Propensity Matching with the `dm2200` Example 
 
-Last Update: 2023-02-13
+Last Update: 2024-02-05
 
-The entire example can be downloaded from the front page of the 500-data website.
+The entire example can be downloaded from [the front page of the 500-data website](https://github.com/THOMASELOVE/500-data).
 
 Here is the [Quarto file](https://github.com/THOMASELOVE/500-data/blob/master/dm2200/dm2200.qmd) including all code.
 
