@@ -2,7 +2,7 @@
 
 Last Update: 2024-02-05
 
-The entire example can be downloaded from the front page of the 500-data website.
+The entire example can be downloaded from the [front page of the 500-data website](https://github.com/THOMASELOVE/500-data/tree/master).
 
 Here is the [Quarto file](https://github.com/THOMASELOVE/500-data/blob/master/toy/toy_analysis.qmd) including all code.
 
