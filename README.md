@@ -4,7 +4,7 @@ Data and R code repository for 500 in Spring 2025.
 
 To obtain all of the data and code in this repository in a single zip file, click on the green button marked Code and click on Download ZIP.
 
-Or, to download a single .Rmd or .csv file, follow [the instructions here](onefile.md). 
+Or, to download a single .qmd, .Rmd or .csv file, follow [the instructions here](onefile.md). 
 
 # Some Work from Other People
 
