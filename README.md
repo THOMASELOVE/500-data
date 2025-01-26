@@ -6,6 +6,10 @@ To obtain all of the data and code in this repository in a single zip file, clic
 
 Or, to download a single .qmd, .Rmd or .csv file, follow [the instructions here](onefile.md). 
 
+## The Four Main Examples
+
+Updated `toy`, `lindner`, `dm2200` and `rhc` examples are now housed at <https://thomaselove.github.io/500-examples/>. Go there for details.
+
 # Some Work from Other People
 
 ## Elizabeth Stuart's Propensity Score Software Page
